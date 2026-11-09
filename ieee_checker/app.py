@@ -140,6 +140,28 @@ def gui():
     annot_var = tk.BooleanVar(value=True)
     status_var = tk.StringVar(value="Choose your paper (PDF) and press Check.")
 
+    # header: logo + app name
+    head = ttk.Frame(root, padding=(12, 10, 12, 0))
+    head.pack(fill="x")
+    try:
+        base = getattr(sys, "_MEIPASS", os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                    "..", "installer"))
+        logo_file = os.path.join(base, "assets", "logo_banner.png")
+        if os.path.isfile(logo_file):
+            img = tk.PhotoImage(file=logo_file)
+            factor = max(1, round(img.height() / 44))      # about 44 px high
+            img = img.subsample(factor, factor)
+            root._logo_img = img                           # keep a reference
+            ttk.Label(head, image=img).pack(side="left", padx=(0, 12))
+    except Exception:  # noqa: BLE001
+        pass
+    titles = ttk.Frame(head)
+    titles.pack(side="left")
+    ttk.Label(titles, text="IEEE Paper Format Checker",
+              font=("TkDefaultFont", 14, "bold")).pack(anchor="w")
+    ttk.Label(titles, text=f"Version {__version__} - checks IEEE conference papers offline",
+              foreground="#666").pack(anchor="w")
+
     top = ttk.Frame(root, padding=12)
     top.pack(fill="x")
     ttk.Label(top, text="Paper (PDF):").grid(row=0, column=0, sticky="w")

@@ -8,7 +8,7 @@ name: Build and test installers
 # tests/samples/sample_errors.pdf, pass the clean sample, write the HTML report and
 # annotated PDF, and its window must open and check a paper on its own.
 # Test outputs (reports, annotated PDFs, macOS screenshot) are uploaded as artifacts.
-# Run from the Actions tab ("Run workflow"), or push a tag like v1.3.1 to also
+# Run from the Actions tab ("Run workflow"), or push a tag like v1.3.2 to also
 # publish the installers as a GitHub Release.
 on:
   push:
@@ -53,9 +53,9 @@ jobs:
           Stop-Process -Id $p.Id -Force
           New-Item -ItemType Directory -Force test-results | Out-Null
           Copy-Item "$env:RUNNER_TEMP\gui_test_IEEE_*" test-results\
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with: { name: windows-installer, path: "dist/*Setup*.exe" }
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         if: always()
         with: { name: test-results-windows, path: test-results, if-no-files-found: ignore }
       - uses: softprops/action-gh-release@v2
@@ -104,9 +104,9 @@ jobs:
           test -f "$RUNNER_TEMP/gui_test_IEEE_report.html" || { echo "the window did not check the paper"; exit 1; }
           cp "$RUNNER_TEMP"/gui_test_IEEE_* test-results/
           pkill -f "IEEE-Paper-Checker.app/Contents/MacOS/IEEE-Paper-Checker" || true
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with: { name: "macos-installer-${{ matrix.arch }}", path: "dist/*.dmg" }
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         if: always()
         with: { name: "test-results-macos-${{ matrix.arch }}", path: test-results, if-no-files-found: ignore }
       - uses: softprops/action-gh-release@v2
@@ -131,13 +131,13 @@ jobs:
           xvfb-run -a bash -c 'ieee-paper-checker "$RUNNER_TEMP/gui_test.pdf" & PID=$!; sleep 30; kill -0 $PID || { echo "the app is not running"; exit 1; }; kill $PID'
           test -f "$RUNNER_TEMP/gui_test_IEEE_report.html" || { echo "the window did not check the paper"; exit 1; }
           mkdir -p test-results && cp "$RUNNER_TEMP"/gui_test_IEEE_* test-results/
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: linux-installers
           path: |
             dist/*.deb
             dist/*.tar.gz
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         if: always()
         with: { name: test-results-linux, path: test-results, if-no-files-found: ignore }
       - uses: softprops/action-gh-release@v2

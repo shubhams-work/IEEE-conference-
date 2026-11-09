@@ -18,7 +18,8 @@ icon = os.path.join(ASSETS, "icon.icns" if is_mac else "icon.ico")
 a = Analysis(
     [os.path.join(ROOT, "ieee_format_checker.py")],
     pathex=[ROOT],
-    datas=[(os.path.join(ASSETS, "icon_256.png"), "assets")],
+    datas=[(os.path.join(ASSETS, "icon_256.png"), "assets"),
+           (os.path.join(ASSETS, "logo_banner.png"), "assets")],
     excludes=["matplotlib", "scipy", "pandas", "IPython", "pytest", "torch",
               "tensorflow", "cv2", "sklearn", "notebook", "jupyter", "lxml"],
 )
