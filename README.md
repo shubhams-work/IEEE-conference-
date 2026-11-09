@@ -45,7 +45,9 @@ Get the installer for your system from the **[download page](https://shubhams-wo
 
 | Area | Checks |
 |---|---|
-| 📄 **Page setup** | A4 (210 × 297 mm) on **every page**, page limit, blank pages |
+| 🕶️ **Double-blind anonymity** (review stage) | No author names, affiliations, e-mails or ORCID iDs; no acknowledgments or funding; own work cited in the third person; no identifying repository links or arXiv stamp; no names or file paths hidden in the PDF's properties |
+| 👥 **Author details** (camera-ready stage) | Author names and affiliations are back on the title page |
+| 📄 **Page setup** | A4 (210 × 297 mm) on **every page**, page limit (6 pages), blank pages |
 | 📐 **Margins & columns** | Top/bottom 19 mm, left/right 16 mm on every page; two columns with a 4.22 mm gap; balanced last page |
 | 🔗 **Citations** | Every reference is cited as [n]; every [n] exists in the list; no duplicates; numbered in order of first citation; no author-year style |
 | 🧭 **In-text references** | Every figure and table is mentioned in the text; no mentions of a *Fig. 7*, *Eq. (9)* or *Section VII* that doesn't exist |
@@ -59,8 +61,11 @@ Get the installer for your system from the **[download page](https://shubhams-wo
 ## How to use
 
 1. Open **IEEE Paper Format Checker**. On Windows you can also right-click a PDF and choose **Check IEEE format**.
-2. Choose your PDF and press **Check paper**.
-3. You get three results, saved next to your PDF:
+2. Choose the **Stage**:
+   - **Review (double-blind):** the anonymous version you submit for review. Checks that nothing reveals the authors.
+   - **Camera-ready:** the final version after acceptance. Checks the author details and IEEE PDF eXpress certification.
+3. Choose your PDF and press **Check paper**.
+4. You get three results, saved next to your PDF:
 
 | Result | What it shows |
 |---|---|
@@ -77,6 +82,7 @@ Get the installer for your system from the **[download page](https://shubhams-wo
 ```bash
 ieee-check paper.pdf                            # Windows: ieee-check.exe
 ieee-check paper.pdf --min-pages 4 --max-pages 6
+ieee-check paper.pdf --stage camera-ready       # final paper (default: review = double-blind)
 ieee-check paper.pdf --paper letter             # require US Letter instead of A4
 ieee-check *.pdf --out reports/ --json          # check many papers, JSON output
 ```
@@ -102,6 +108,9 @@ Remove `hyperref`, or use `\usepackage[draft]{hyperref}`, because IEEE Xplore PD
 All rules are in the **CONFERENCE PROFILE** block at the top of [`ieee_checker/spec.py`](ieee_checker/spec.py):
 
 ```python
+CONFERENCE = "COSMIC 2026"
+STAGE = "review"                # "review" (double-blind) or "camera-ready"
+DOUBLE_BLIND = True
 REQUIRED_PAPER = "a4"           # "a4", "letter" or "auto"
 MIN_PAGES = 4
 MAX_PAGES = 6
@@ -113,15 +122,19 @@ UNCITED_REFERENCE_IS_ERROR = True
 
 Change the values, push to GitHub, and new installers for every platform are built, tested and published automatically (see below). Authors can also change the paper size and page range in the app for a single check.
 
+The default profile follows the **COSMIC 2026** author instructions.
+
 | Rule | Default requirement | If broken |
 |---|---|---|
+| Double-blind (review stage) | No author information anywhere in the PDF | Error (self-citations, repo links: Warning) |
+| Authors (camera-ready stage) | Names and affiliations present | Error |
 | Paper size | A4 on every page | Error |
 | Margins | 19 mm top/bottom, 16 mm left/right | Error (> 3 mm) / Warning |
 | Columns | Two, 4.22 mm apart (4.0–5.8 mm accepted) | Error / Warning |
 | Length | 4–6 pages | Error above max, Warning below min |
 | Citations | All references cited, all citations exist | Error |
 | In-text references | All figures/tables mentioned, none missing | Error |
-| PDF eXpress | Certified and unmodified | Error |
+| PDF eXpress | Certified and unmodified (camera-ready stage) | Error |
 | Xplore file rules | Fonts, security, bookmarks, version … | Error (links / subsetting: Warning) |
 
 ## Build from source
@@ -182,7 +195,7 @@ docs/              download page (GitHub Pages)
 
 ## Limits
 
-These are automatic checks of what can be measured in the PDF. They complement, and don't replace, your conference's author instructions and IEEE PDF eXpress. Table and image detection uses heuristics, so if a result looks wrong, look at the highlighted spot in the annotated PDF.
+These are automatic checks of what can be measured in the PDF. Plagiarism (IEEE CrossCheck) and the Prohibited Authors List are checked by IEEE online and are not part of this tool. They complement, and don't replace, your conference's author instructions and IEEE PDF eXpress. Table and image detection uses heuristics, so if a result looks wrong, look at the highlighted spot in the annotated PDF.
 
 <div align="center">
 <sub>Not affiliated with or endorsed by IEEE.</sub>

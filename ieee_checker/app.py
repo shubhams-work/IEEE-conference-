@@ -25,10 +25,10 @@ def output_paths(pdf_path, out_dir=None):
 
 
 def check_pdf(pdf_path, paper=None, max_pages=-1, out_dir=None, annotate=True,
-              progress=None, min_pages=-1):
-    """paper/max_pages/min_pages default to the conference profile in spec.py."""
+              progress=None, min_pages=-1, stage=None):
+    """paper/max_pages/min_pages/stage default to the conference profile in spec.py."""
     res = Analyzer(pdf_path, paper=paper, max_pages=max_pages, progress=progress,
-                   min_pages=min_pages).run()
+                   min_pages=min_pages, stage=stage).run()
     html_path, pdf_out = output_paths(pdf_path, out_dir)
     write_html(res, html_path)
     if annotate and not any(f.category == "File" and f.severity == ERROR for f in res.findings):
@@ -70,6 +70,9 @@ def cli(argv):
                    help=f"minimum pages, 0 = none (default: {spec.MIN_PAGES})")
     p.add_argument("--max-pages", type=int, default=spec.MAX_PAGES,
                    help=f"page limit, 0 = none (default: {spec.MAX_PAGES})")
+    p.add_argument("--stage", choices=["review", "camera-ready"], default=spec.STAGE,
+                   help="review = double-blind review submission (anonymity checks); "
+                        f"camera-ready = final paper (default: {spec.STAGE})")
     p.add_argument("--out", help="folder for the reports (default: next to the PDF)")
     p.add_argument("--no-annotate", action="store_true", help="skip the annotated PDF")
     p.add_argument("--json", action="store_true", help="print findings as JSON")
@@ -82,7 +85,8 @@ def cli(argv):
             worst = 1
             continue
         res, html_path, pdf_out = check_pdf(pdf, a.paper, a.max_pages or None, a.out,
-                                            not a.no_annotate, min_pages=a.min_pages or None)
+                                            not a.no_annotate, min_pages=a.min_pages or None,
+                                            stage=a.stage)
         if a.json:
             print(json.dumps({"file": pdf, "findings": [f.__dict__ for f in res.findings],
                               "measurements": res.measurements, "images": res.images,
@@ -116,7 +120,7 @@ def gui():
 
     root = tk.Tk()
     root.title(f"IEEE Paper Format Checker {__version__}")
-    root.geometry("1040x660")
+    root.geometry("1120x680")
     root.minsize(760, 480)
     try:  # window / taskbar icon (bundled by the installer build)
         base = getattr(sys, "_MEIPASS", os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -135,6 +139,8 @@ def gui():
     pdf_var = tk.StringVar()
     paper_names = {"a4": "A4", "letter": "US Letter", "auto": "Auto-detect"}
     paper_var = tk.StringVar(value=paper_names.get(spec.REQUIRED_PAPER, "A4"))
+    stage_names = {"review": "Review (double-blind)", "camera-ready": "Camera-ready"}
+    stage_var = tk.StringVar(value=stage_names.get(spec.STAGE, "Review (double-blind)"))
     minp_var = tk.StringVar(value=str(spec.MIN_PAGES or ""))
     pages_var = tk.StringVar(value=str(spec.MAX_PAGES or ""))
     annot_var = tk.BooleanVar(value=True)
@@ -159,7 +165,7 @@ def gui():
     titles.pack(side="left")
     ttk.Label(titles, text="IEEE Paper Format Checker",
               font=("TkDefaultFont", 14, "bold")).pack(anchor="w")
-    ttk.Label(titles, text=f"Version {__version__} - checks IEEE conference papers offline",
+    ttk.Label(titles, text=f"{spec.CONFERENCE} rules - version {__version__} - works offline",
               foreground="#666").pack(anchor="w")
 
     top = ttk.Frame(root, padding=12)
@@ -178,6 +184,9 @@ def gui():
 
     opts = ttk.Frame(root, padding=(12, 0))
     opts.pack(fill="x")
+    ttk.Label(opts, text="Stage:").pack(side="left")
+    ttk.Combobox(opts, textvariable=stage_var, width=20, state="readonly",
+                 values=list(stage_names.values())).pack(side="left", padx=(4, 16))
     ttk.Label(opts, text="Paper size:").pack(side="left")
     ttk.Combobox(opts, textvariable=paper_var, width=11, state="readonly",
                  values=["A4", "US Letter", "Auto-detect"]).pack(side="left", padx=(4, 16))
@@ -185,7 +194,7 @@ def gui():
     ttk.Entry(opts, textvariable=minp_var, width=4).pack(side="left", padx=(4, 4))
     ttk.Label(opts, text="max").pack(side="left")
     ttk.Entry(opts, textvariable=pages_var, width=4).pack(side="left", padx=(4, 16))
-    ttk.Checkbutton(opts, text="Also create annotated PDF", variable=annot_var).pack(side="left")
+    ttk.Checkbutton(opts, text="Annotated PDF", variable=annot_var).pack(side="left")
     check_btn = ttk.Button(opts, text="Check paper")
     check_btn.pack(side="right")
 
@@ -266,6 +275,7 @@ def gui():
                                    "(leave empty for no limit).")
             return
         paper = {"Auto-detect": "auto", "US Letter": "letter", "A4": "a4"}[paper_var.get()]
+        stage = {v: k for k, v in stage_names.items()}[stage_var.get()]
         check_btn.configure(state="disabled")
         prog.configure(value=0)
 
@@ -273,7 +283,7 @@ def gui():
             try:
                 res, h, p = check_pdf(path, paper, int(mp) if mp else None, None,
                                       annot_var.get(), progress=set_progress,
-                                      min_pages=int(mn) if mn else None)
+                                      min_pages=int(mn) if mn else None, stage=stage)
                 root.after(0, lambda: done(res, h, p))
             except Exception as e:  # noqa: BLE001
                 root.after(0, lambda: done(None, None, None, e))

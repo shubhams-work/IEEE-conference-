@@ -94,7 +94,7 @@ def write_html(res: Result, out_path: str):
                   [[e(x["item"]), xref_cell(x), e(x["pages"])] for x in res.crossrefs]) \
         if res.crossrefs else "<p class='muted'>No figures, tables or numbered equations found.</p>"
     m = _spec.MARGINS.get(res.paper, _spec.CONF_MARGINS)
-    profile = (f"Paper {'A4 (210 x 297 mm)' if _spec.REQUIRED_PAPER == 'a4' else _spec.REQUIRED_PAPER} on every page"
+    profile = (f"{_spec.CONFERENCE}, " + ("review submission (double-blind, anonymity checked)" if getattr(res, 'stage', 'review') == 'review' else "camera-ready paper") + ": ") + (f"Paper {'A4 (210 x 297 mm)' if _spec.REQUIRED_PAPER == 'a4' else _spec.REQUIRED_PAPER} on every page"
                f" &middot; margins top {m['top'] / _spec.MM:.1f} mm, bottom {m['bottom'] / _spec.MM:.1f} mm, "
                f"left/right {m['left'] / _spec.MM:.1f} mm &middot; two columns, "
                f"{_spec.COLUMN_GAP / _spec.MM:.2f} mm gap &middot; "

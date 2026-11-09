@@ -32,8 +32,19 @@ EXPECTED_ERRORS = {               # substring that must appear in some ERROR fin
 }
 
 
-def run(exe, pdf, out):
-    cmd = list(exe) + [pdf, "--json", "--out", out]
+EXPECTED_REVIEW = {               # double-blind review stage: substring in an error/warning
+    "author block on title page": "author names / affiliations",
+    "e-mail address": "e-mail address",
+    "acknowledgment section": "acknowledgment section",
+    "funding information": "funding",
+    "author name in PDF properties": "properties contain an author",
+    "first-person self-citation": "previous work",
+    "code repository link": "code repository",
+}
+
+
+def run(exe, pdf, out, stage="camera-ready"):
+    cmd = list(exe) + [pdf, "--json", "--out", out, "--stage", stage]
     p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
                        timeout=300)
     try:
@@ -96,6 +107,31 @@ def main():
     else:
         print("  [OK ] clean sample only lacks the PDF eXpress stamp")
     check_outputs(out, "sample_ok", failures)
+
+    # double-blind review stage (anonymity)
+    code, data = run(exe, os.path.join(SAMPLES, "review_identifying.pdf"), out, "review")
+    msgs = [f["message"] for f in data["findings"] if f["severity"] in ("error", "warning")]
+    print(f"review_identifying.pdf (review stage): {len(msgs)} error(s)/warning(s)")
+    for label, needle in EXPECTED_REVIEW.items():
+        ok = any(needle.lower() in m.lower() for m in msgs)
+        print(f"  [{'OK ' if ok else 'FAIL'}] detects {label}")
+        if not ok:
+            failures.append(f"review stage did not detect: {label}")
+    code, data = run(exe, os.path.join(SAMPLES, "review_anonymous.pdf"), out, "review")
+    errors = [f["message"] for f in data["findings"] if f["severity"] == "error"]
+    print(f"review_anonymous.pdf (review stage): {len(errors)} error(s)")
+    for m in errors:
+        print("  [FAIL] unexpected error:", m[:150])
+    if errors:
+        failures.append(f"{len(errors)} unexpected error(s) on the anonymous review sample")
+    else:
+        print("  [OK ] anonymous paper passes the review stage")
+    code, data = run(exe, os.path.join(SAMPLES, "review_anonymous.pdf"), out, "camera-ready")
+    errors = [f["message"] for f in data["findings"] if f["severity"] == "error"]
+    ok = any("must list all authors" in m for m in errors)
+    print(f"  [{'OK ' if ok else 'FAIL'}] camera-ready stage requires author names")
+    if not ok:
+        failures.append("camera-ready stage did not require author names")
 
     if failures:
         print("\nFAILED:\n  - " + "\n  - ".join(failures))

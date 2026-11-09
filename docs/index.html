@@ -200,12 +200,12 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
     <h2>What it checks</h2>
     <p class="sub">Pick your PDF, press <b>Check paper</b>, and get a list of problems, a full report and an annotated copy of your paper.</p>
     <div class="grid three">
-      <div class="card feat"><div class="ico">📄</div><h3>Page setup &amp; margins</h3><p>A4 on every page, required margins on every page, two columns with the right gap, and the page limit.</p></div>
+      <div class="card feat"><div class="ico">🕶️</div><h3>Double-blind anonymity</h3><p>For review: no author names, affiliations, e-mails, acknowledgments, funding, first-person self-citations, identifying links or names hidden in the PDF properties.</p></div>
+      <div class="card feat"><div class="ico">📄</div><h3>Page setup &amp; margins</h3><p>A4 on every page, required margins on every page, two columns with the right gap, the page limit, Times 10 pt text and embedded fonts.</p></div>
       <div class="card feat"><div class="ico">🔗</div><h3>Citations</h3><p>Every reference in the list is cited in the text, every [n] in the text exists, and numbering follows IEEE order.</p></div>
       <div class="card feat"><div class="ico">🧭</div><h3>In-text references</h3><p>Every figure and table is mentioned, with no references to a Fig. 7, Eq. (9) or Section VII that doesn't exist.</p></div>
-      <div class="card feat"><div class="ico">✅</div><h3>IEEE PDF eXpress</h3><p>Looks for the "Certified by IEEE PDFeXpress" stamp, checks the file wasn't changed afterwards, and applies all IEEE Xplore file rules.</p></div>
+      <div class="card feat"><div class="ico">✅</div><h3>Camera-ready &amp; PDF eXpress</h3><p>Author details are back, the "Certified by IEEE PDFeXpress" stamp is present, the file wasn't changed afterwards, and all IEEE Xplore file rules are met.</p></div>
       <div class="card feat"><div class="ico">📊</div><h3>Tables &amp; images</h3><p>Finds tables pasted as pictures and images below 300 / 600 dpi, including enlarged or blurry ones.</p></div>
-      <div class="card feat"><div class="ico">🔤</div><h3>Fonts &amp; style</h3><p>Times 10 pt body, all fonts embedded, no bitmap fonts, plus the IEEE title, abstract, heading and caption style.</p></div>
     </div>
   </div>
 </section>
@@ -226,17 +226,18 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
 
 <section id="rules">
   <div class="wrap">
-    <h2>Default conference rules</h2>
+    <h2>Default rules (COSMIC 2026)</h2>
     <p class="sub">Organisers can change these in one file (<code>ieee_checker/spec.py</code>) and rebuild.</p>
     <div class="tw">
     <table class="rules">
       <tr><th>Rule</th><th>Requirement</th></tr>
+      <tr><td>Review submission</td><td>Double-blind: no author information anywhere in the PDF</td></tr>
+      <tr><td>Camera-ready</td><td>Author names and affiliations present; certified by IEEE PDF eXpress</td></tr>
       <tr><td>Paper size</td><td>A4 (210 × 297 mm) on every page</td></tr>
       <tr><td>Margins</td><td>Top and bottom 0.75 in (19 mm), left and right 0.625 in (16 mm)</td></tr>
       <tr><td>Columns</td><td>Two columns, 4.22 mm apart</td></tr>
-      <tr><td>Length</td><td>4-6 pages (editable in the app)</td></tr>
+      <tr><td>Length</td><td>At most 6 pages (editable in the app)</td></tr>
       <tr><td>Citations</td><td>Every reference cited; every citation in the reference list</td></tr>
-      <tr><td>PDF</td><td>Certified by IEEE PDF eXpress and not modified afterwards</td></tr>
     </table>
     </div>
   </div>

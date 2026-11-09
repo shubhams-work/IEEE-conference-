@@ -12,6 +12,11 @@ MM = 72.0 / 25.4
 # =============================================================================
 #  CONFERENCE PROFILE  -  edit this block to match your conference's author kit
 # =============================================================================
+CONFERENCE = "COSMIC 2026"      # shown in the app and reports
+# "review": double-blind review submission (anonymity checks, no PDF eXpress yet)
+# "camera-ready": final paper (author names required, PDF eXpress required)
+STAGE = "review"
+DOUBLE_BLIND = True             # anonymity checks for the review stage
 REQUIRED_PAPER = "a4"           # "a4", "letter", or "auto" (accept either)
 MIN_PAGES = 4                   # fewer pages -> warning   (None = no minimum)
 MAX_PAGES = 6                   # more pages  -> error     (None = no limit)

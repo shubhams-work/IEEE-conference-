@@ -240,7 +240,7 @@ def _summary_html(res, n_paper_pages):
         verdict, vc = "Looks ready for submission", "good"
     m = spec.MARGINS.get(res.paper, spec.CONF_MARGINS)
     mm = spec.MM
-    rules = (f"Paper {'A4' if spec.REQUIRED_PAPER == 'a4' else spec.REQUIRED_PAPER} on every page; "
+    rules = (f"{spec.CONFERENCE}, " + ("review submission (double-blind, anonymity checked)" if getattr(res, 'stage', 'review') == 'review' else "camera-ready paper") + ": ") + (f"Paper {'A4' if spec.REQUIRED_PAPER == 'a4' else spec.REQUIRED_PAPER} on every page; "
              f"margins top {m['top'] / mm:.1f} mm, bottom {m['bottom'] / mm:.1f} mm, left/right "
              f"{m['left'] / mm:.1f} mm; two columns with {spec.COLUMN_GAP / mm:.2f} mm gap; "
              f"{spec.MIN_PAGES or 1}-{spec.MAX_PAGES or 'any'} pages; every reference cited; "

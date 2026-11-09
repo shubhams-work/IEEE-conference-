@@ -63,6 +63,7 @@ class Result:
     crossrefs: list = field(default_factory=list)
     compliance: list = field(default_factory=list)
     paper: str = "letter"
+    stage: str = "review"
 
     def count(self, sev):
         return sum(1 for f in self.findings if f.severity == sev)
@@ -140,6 +141,11 @@ def _same_date(a: str, b: str):
     return abs((da - db).total_seconds()) <= 2
 
 
+def _clip(text: str, n: int) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= n else text[: n - 3] + "..."
+
+
 def fmt_in(pt: float) -> str:
     return f"{pt / 72:.2f} in ({pt / spec.MM:.1f} mm)"
 
@@ -160,8 +166,9 @@ COMMON_HEADINGS = ("introduction", "related work", "background", "methodology", 
 
 class Analyzer:
     def __init__(self, path: str, paper: str | None = None, max_pages: int | None = -1,
-                 progress=None, min_pages: int | None = -1):
+                 progress=None, min_pages: int | None = -1, stage: str | None = None):
         self.path = path
+        self.stage = (stage or spec.STAGE).lower()        # "review" or "camera-ready"
         self.paper_pref = spec.REQUIRED_PAPER if paper is None else paper
         # -1 = use the conference profile in spec.py; None/0 = no limit
         self.max_pages = spec.MAX_PAGES if max_pages == -1 else (max_pages or None)
@@ -191,6 +198,10 @@ class Analyzer:
             return self.res
 
         self.res.measurements["File"] = os.path.basename(self.path)
+        self.res.measurements["Checked as"] = (
+            f"{spec.CONFERENCE} - " + ("review submission (double-blind)"
+                                       if self.stage == "review" else "camera-ready paper"))
+        self.res.stage = self.stage
         self.res.measurements["Pages"] = doc.page_count
         self.res.measurements["PDF producer"] = (doc.metadata.get("producer") or "-")[:80]
 
@@ -210,6 +221,7 @@ class Analyzer:
             ("Checking image quality", self.check_images),
             ("Checking references & citations", self.check_references),
             ("Checking leftover template text", self.check_leftovers),
+            ("Checking author details / anonymity", self.check_authors),
             ("Checking PDF eXpress / IEEE Xplore rules", self.check_xplore),
             ("Checking misc. items", self.check_misc),
         ]
@@ -553,8 +565,13 @@ class Analyzer:
                 t = ln.text.strip()
                 key = (round(ln.bbox.x0), round(ln.bbox.y0))
                 if re.search(r"arXiv:\d{4}\.\d{4,5}", t):
-                    self.add(WARNING, "Margins", "arXiv identifier stamp found in the margin. "
-                             "Remove it for IEEE submission.", page=pno + 1, rect=rect_t(ln.bbox))
+                    review = self.stage == "review" and spec.DOUBLE_BLIND
+                    self.add(ERROR if review else WARNING, "Anonymity" if review else "Margins",
+                             "arXiv identifier stamp found in the margin. " + (
+                                 "For double-blind review the paper must not be posted on "
+                                 "arXiv or any public website." if review else
+                                 "Remove it for IEEE submission."),
+                             page=pno + 1, rect=rect_t(ln.bbox))
                     margin_lines.add(key)
                 elif re.fullmatch(r"(page\s*)?[-–]?\s*\d{1,4}\s*[-–]?(\s*(of|/)\s*\d+)?", t,
                                   re.I):
@@ -1447,6 +1464,192 @@ class Analyzer:
             self.add(PASS, "Template text", "No leftover template text or unresolved "
                      "references ('??').")
 
+
+    # ------------------------------------------------ author details / anonymity
+    AFFIL_RE = re.compile(
+        r"\b(universit\w*|institut\w*|college|school of|department|dept\.|faculty of|"
+        r"laborator\w*|labs?\b|research (center|centre)|centre for|center for|academy|"
+        r"polytechnic|inc\.|ltd\.?|pvt\.?|corporation|technologies|ieee (member|fellow|senior))",
+        re.I)
+    EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+    ORCID_RE = re.compile(r"\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b")
+    ANON_RE = re.compile(r"anonymous|anonymi[sz]ed|blind(ed)? (submission|review)|"
+                         r"author(s)?\s*(names?|information|details)?\s*(removed|hidden|withheld|"
+                         r"omitted)|paper\s*id|submission\s*(id|#|number)", re.I)
+    SELF_REF_RES = [
+        r"\bour (previous|prior|earlier|recent|past|former) (work|works|paper|papers|study|studies|"
+        r"research|method|approach|system|model|framework|results?)\b",
+        r"\bin our (previous|prior|earlier|recent|past|former)\b",
+        r"\bwe (have )?(previously|earlier|recently) (proposed|presented|introduced|developed|"
+        r"showed|shown|published|reported|designed)\b",
+        r"\bas we (have )?(showed|shown|reported|proposed|demonstrated|presented) in \[\d+",
+        r"\bour (research )?(group|lab|laboratory|team)('s)?\b",
+        r"\b(extends|extension of|builds on|building on) our\b",
+    ]
+    FUNDING_RE = (r"\b(this (work|research|project|study|paper) (was|is|has been) (partially |partly |"
+                  r"in part )?(supported|funded|sponsored|financed)|funded by|sponsored by|"
+                  r"financial(ly)? support|grant (no\.?|number|#|id)|under (the )?grant|"
+                  r"supported (in part )?by (the )?(grant|national|department|ministry|government|"
+                  r"dst|serb|aicte|ugc|csir|nsf|dfg|erc|nsfc))")
+    REPO_RE = r"(github|gitlab|bitbucket|huggingface)\.(com|co|org)/[\w.\-]+"
+
+    def _author_block(self):
+        """Lines between the title and the abstract on page 1 (the author block)."""
+        p1 = [ln for ln in self.lines if ln.page == 0 and ln.horizontal]
+        if not p1:
+            return None, []
+        r = self.page_rects[0]
+        top = [ln for ln in p1 if ln.bbox.y0 < 0.45 * r.height]
+        if not top:
+            return None, []
+        tsize = max(ln.size for ln in top)
+        title = [ln for ln in top if ln.size >= tsize - 0.6]
+        title_bottom = max(ln.bbox.y1 for ln in title)
+        ab = [ln for ln in p1 if re.match(r"^\s*(abstract|index terms)", ln.text, re.I)]
+        if not ab:
+            ab = [ln for ln in p1 if re.match(r"^\s*([IVX]+\.|1\.?)?\s*introduction\s*$",
+                                              ln.text, re.I)]
+        if not ab:
+            return title_bottom, None
+        limit = min(ln.bbox.y0 for ln in ab)
+        block = [ln for ln in p1 if ln not in title and ln.bbox.y0 >= title_bottom - 1
+                 and ln.bbox.y1 <= limit + 1]
+        return title_bottom, block
+
+    def _body_lines_before_refs(self):
+        ref = getattr(self, "refs_line", None)
+        return [ln for ln in self.lines if ln.horizontal and
+                (ref is None or not self._after(ln, ref))]
+
+    def check_authors(self):
+        _, block = self._author_block()
+        block_text = " ".join(ln.text for ln in block) if block else ""
+        anon = bool(self.ANON_RE.search(block_text))
+        identifying = bool(block_text.strip()) and (
+            not anon or self.AFFIL_RE.search(block_text) or self.EMAIL_RE.search(block_text))
+        union = pymupdf.Rect()
+        for ln in block or []:
+            union |= ln.bbox
+
+        if self.stage != "review" or not spec.DOUBLE_BLIND:
+            # camera-ready: authors must be there
+            if block is None:
+                self.add(INFO, "Authors", "Could not locate the author block between the title "
+                         "and the abstract; please check the author names manually.", page=1)
+            elif not block_text.strip() or (anon and not self.AFFIL_RE.search(block_text)):
+                self.add(ERROR, "Authors", "The camera-ready paper must list all authors' names "
+                         "and affiliations under the title (the review version was anonymous).",
+                         page=1, rect=rect_t(union) if not union.is_empty else None)
+            else:
+                self.add(PASS, "Authors", "Author names and affiliations are present on the "
+                         "title page.", detail=block_text[:160])
+            return
+
+        problems = 0
+        # 1. author names / affiliations on the title page
+        if block is None:
+            self.add(INFO, "Anonymity", "Could not locate the author block between the title "
+                     "and the abstract; please check by eye that no author names are shown.",
+                     page=1)
+        elif identifying:
+            problems += 1
+            self.add(ERROR, "Anonymity", "Author names / affiliations appear on the title page. "
+                     "For double-blind review, remove all author information from the PDF "
+                     "(enter it only on the submission site).", page=1, rect=rect_t(union),
+                     detail="Found: \"" + _clip(block_text, 160) + "\". In LaTeX use e.g. "
+                            "\\author{\\IEEEauthorblockN{Anonymous Authors}}.")
+        # 2. e-mail addresses and ORCID iDs anywhere in the paper (not in the references)
+        body = self._body_lines_before_refs()
+        for name, rx in (("e-mail address", self.EMAIL_RE), ("ORCID iD", self.ORCID_RE)):
+            hits = []
+            for ln in body:
+                for mt in rx.finditer(ln.text):
+                    hits.append((ln.page + 1, mt.group(0)))
+            if hits:
+                problems += 1
+                pg, rc, ex = self._places([(p, [t]) for p, t in hits[:10]])
+                self.add(ERROR, "Anonymity", f"{len(hits)} {name}(s) found in the paper: "
+                         + ", ".join(t for _, t in hits[:5]) + ". They reveal the authors.",
+                         page=pg or hits[0][0], rect=rc, extra=ex)
+        # 3. acknowledgments and funding sources
+        for ln in body:
+            if re.fullmatch(r"\s*([IVX]+\.\s*)?acknowledge?ments?\s*", ln.text, re.I):
+                problems += 1
+                self.add(ERROR, "Anonymity", "The paper has an Acknowledgment section. For "
+                         "double-blind review remove acknowledgments (names and funding "
+                         "sources); add them back in the camera-ready paper.",
+                         page=ln.page + 1, rect=rect_t(ln.bbox))
+                break
+        text, page_at = self._text_with_pages(before=getattr(self, "refs_line", None))
+        fund = [(page_at(m.start()), m.group(0)) for m in re.finditer(self.FUNDING_RE, text, re.I)]
+        if fund:
+            problems += 1
+            pg, rc, ex = self._places([(p, [t]) for p, t in fund[:8]])
+            self.add(ERROR, "Anonymity", "Funding / sponsor information found (e.g. \""
+                     + fund[0][1] + "\"). Remove it for the review version.",
+                     page=pg or fund[0][0], rect=rc, extra=ex)
+        # 4. referring to own previous work in the first person
+        spans = sorted((m.start(), m.end(), m.group(0)) for rx in self.SELF_REF_RES
+                       for m in re.finditer(rx, text, re.I))
+        merged = []
+        for st, en, _t in spans:                    # merge overlapping phrases
+            if merged and st < merged[-1][1]:
+                merged[-1][1] = max(merged[-1][1], en)
+            else:
+                merged.append([st, en])
+        selfref = [(page_at(st), text[st:en]) for st, en in merged]
+        if selfref:
+            problems += 1
+            pg, rc, ex = self._places([(p, [t]) for p, t in selfref[:10]])
+            self.add(WARNING, "Anonymity", f"{len(selfref)} phrase(s) refer to the authors' own "
+                     "previous work in the first person (e.g. \"" + selfref[0][1] + "\").",
+                     page=pg or selfref[0][0], rect=rc, extra=ex,
+                     detail="Cite your past work in the third person, like any other work: "
+                            "write \"Recently, the authors in [9] proposed ...\" instead of "
+                            "\"Recently, we have proposed [9] ...\". Do not leave the reference out.")
+        # 5. links to code repositories that can reveal the authors
+        repos = [(page_at(m.start()), m.group(0)) for m in re.finditer(self.REPO_RE, text, re.I)]
+        if repos:
+            problems += 1
+            pg, rc, ex = self._places([(p, [t]) for p, t in repos[:8]])
+            self.add(WARNING, "Anonymity", "Link(s) to a code repository found (e.g. "
+                     + repos[0][1] + "). A user or organisation name in a link can reveal "
+                     "the authors.", page=pg or repos[0][0], rect=rc, extra=ex,
+                     detail="Use an anonymised link for review (e.g. anonymous.4open.science) "
+                            "and the real one in the camera-ready paper.")
+        # 6. names and file names hidden in the PDF properties
+        md = self.doc.metadata or {}
+        if (md.get("author") or "").strip():
+            problems += 1
+            self.add(ERROR, "Anonymity", "The PDF's properties contain an author name: \""
+                     + md["author"].strip()[:80] + "\". Reviewers can see it in File > "
+                     "Properties.", detail="Word: File > Info > Inspect Document > remove "
+                     "'Document Properties and Personal Information'. LaTeX: "
+                     "\\hypersetup{pdfauthor={}} or remove hyperref.")
+        try:
+            xmp = self.doc.get_xml_metadata() or ""
+        except Exception:  # noqa: BLE001
+            xmp = ""
+        mx = re.search(r"<dc:creator>.*?<rdf:li[^>]*>([^<]+)</rdf:li>", xmp, re.S)
+        if mx and mx.group(1).strip() and mx.group(1).strip() != (md.get("author") or "").strip():
+            problems += 1
+            self.add(ERROR, "Anonymity", "The PDF's hidden XMP metadata contains an author name: "
+                     f"\"{mx.group(1).strip()[:80]}\".")
+        leaks = []
+        for key in ("title", "subject", "keywords", "creator", "producer"):
+            val = md.get(key) or ""
+            if re.search(r"\.(docx?|tex|dvi|ps|odt|rtf)\b|[A-Za-z]:\\|\\Users\\|/home/|/Users/",
+                         val, re.I):
+                leaks.append(f"{key}: \"{val[:90]}\"")
+        if leaks:
+            problems += 1
+            self.add(WARNING, "Anonymity", "A file name or folder path is stored in the PDF's "
+                     "properties; it may contain an author's name.", detail="; ".join(leaks)
+                     + ". Rename the source file (e.g. paper.docx / paper.tex) and re-create the PDF.")
+        if not problems and block is not None:
+            self.add(PASS, "Anonymity", "No author-identifying information found (title page, "
+                     "e-mails, acknowledgments, funding, self-references, PDF properties).")
+
     # ------------------------------------------------- PDF eXpress / IEEE Xplore
     def check_xplore(self):
         """IEEE PDF eXpress origin + the IEEE Xplore PDF rules that eXpress enforces
@@ -1509,11 +1712,19 @@ class Analyzer:
                                 "eXpress e-mailed you, or run it through eXpress again.")
         else:
             other = re.search(r"pdf\s*-?\s*e?xpress", " ".join(fields.values()), re.I)
-            comp.append({"rule": "Certified by IEEE PDF eXpress", "ok": False,
-                         "found": "no certification stamp" + (" (eXpress is mentioned, but "
-                                                              "without the stamp)" if other else
-                                                              f" - made by {producer[:45]}")})
-            if spec.REQUIRE_PDF_EXPRESS:
+            if self.stage == "review":
+                comp.append({"rule": "Certified by IEEE PDF eXpress", "ok": True,
+                             "found": "not needed for the review submission "
+                                      "(required for the camera-ready paper)"})
+                self.add(INFO, "PDF eXpress / Xplore", "IEEE PDF eXpress certification is not "
+                         "needed for the review submission; it will be required for the "
+                         "camera-ready paper.")
+            else:
+                comp.append({"rule": "Certified by IEEE PDF eXpress", "ok": False,
+                             "found": "no certification stamp" + (
+                                 " (eXpress is mentioned, but without the stamp)" if other
+                                 else f" - made by {producer[:45]}")})
+            if spec.REQUIRE_PDF_EXPRESS and self.stage != "review":
                 self.add(ERROR, "PDF eXpress / Xplore",
                          "This PDF is not certified by IEEE PDF eXpress: the stamp "
                          "'Certified by IEEE PDFeXpress at <date>' is missing from its "
