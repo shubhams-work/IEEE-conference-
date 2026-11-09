@@ -321,6 +321,22 @@ footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wr
           mainMeta.textContent = "Version " + ver + " · " + mb(asset.size) + " · Other systems below";
         }
       });
+      // Apple-silicon build missing from this release (e.g. no GitHub Mac runner was free):
+      // offer the Intel build, which runs on Apple silicon through Rosetta 2.
+      var pick = function (id) { return (rel.assets || []).filter(function (a) { return PLAT[id].re.test(a.name); })[0]; };
+      var intel = pick("mac-intel");
+      if (!pick("mac-arm") && intel) {
+        var armBtn = document.querySelector('a.get[data-asset="mac-arm"]');
+        var armFile = document.querySelector('.file[data-asset="mac-arm"]');
+        if (armBtn) armBtn.href = intel.browser_download_url;
+        if (armFile) armFile.textContent = "Apple-silicon build coming soon. Until then: " + intel.name +
+          " · " + mb(intel.size) + " (Intel build, runs through Rosetta 2)";
+        if (mine === "mac-arm") {
+          mainBtn.href = intel.browser_download_url;
+          mainMeta.textContent = "Version " + ver + " · " + mb(intel.size) +
+            " · Intel build, runs on Apple silicon through Rosetta 2";
+        }
+      }
     })
     .catch(function () {
       document.getElementById("dl-note").insertAdjacentHTML("afterbegin",
