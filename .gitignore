@@ -3,6 +3,7 @@
 build/
 dist/
 *.spec
+!installer/ieee_checker.spec
 __pycache__/
 *_IEEE_report.html
 *_IEEE_annotated.pdf
