@@ -107,7 +107,16 @@ From a terminal: `ieee-check --check-update` (just look) or `ieee-check --update
 
 Every paper approved by [IEEE PDF eXpress](https://ieee-pdf-express.org) carries a stamp in its document properties (Acrobat Reader: *File → Properties*; Mac: *Get Info*). It looks like *"Certified by IEEE PDFeXpress at 10/28/2026 4:40:27 PM"* or *"Certified by IEEE PDFExpress at October 28, 2026 16:40:27"*. If the stamp is missing, the paper didn't go through eXpress.
 
-eXpress sets the file's **last-modified time** to the moment it certified the paper. If the file is edited, re-saved, compressed or merged afterwards, that time changes and no longer matches the stamp, and the checker reports it. **Submit exactly the file eXpress e-mailed back.** The checker reads only what is written in the file; it can't contact IEEE to confirm the stamp is genuine.
+The checker looks at four pieces of evidence:
+
+| Evidence | What it shows |
+|---|---|
+| **The stamp** in the document properties | eXpress certified the paper. If only a hidden XMP copy is left, a program rewrote the properties afterwards. |
+| **The eXpress processing record** | eXpress checks every paper with Enfocus PitStop Server, which writes a log into the PDF: the program, the eXpress server, the time and the conference folder. Much harder to fake than the stamp text. A stamp without this record is a warning. |
+| **Last-modified time = stamp time** | eXpress sets the modified time when it certifies. Editing, re-saving, compressing or merging changes it. |
+| **One saved revision** | eXpress delivers a file with a single revision. Many editors (Acrobat, Preview, signature tools) add a revision on top, even when the dates still look right. |
+
+**Submit exactly the file eXpress e-mailed back.** The checker reads only what is written in the file; it can't contact IEEE, so for a disputed paper the eXpress confirmation e-mail is the final proof.
 
 ### LaTeX users
 

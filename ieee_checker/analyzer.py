@@ -155,6 +155,74 @@ def _parse_stamp_date(s: str):
     return None
 
 
+def _express_record(doc) -> dict:
+    """Read the processing log IEEE PDF eXpress leaves in a certified PDF.
+
+    eXpress (run by Aptara for IEEE) checks papers with Enfocus PitStop Server, which
+    stores an Enfocus "Certified PDF" log in the file: catalog /FICL:Enfocus ->
+    /CertifiedWF -> /Sessions (one compressed record per processing session: application,
+    licence holder, end time) and /FileMapping (path of the file on the eXpress server,
+    e.g. .../ieee-pdf-express.org/PDFeXpress/<conference>/<paper>.pdf)."""
+    import datetime as _d
+    rec = {"present": False, "express": False, "sessions": [], "end": None, "path": "",
+           "folder": ""}
+    try:
+        cat = doc.xref_object(doc.pdf_catalog())
+        m = re.search(r"/FICL:Enfocus\s+(\d+)\s+0\s+R", cat)
+        if not m:
+            return rec
+        m = re.search(r"/CertifiedWF\s+(\d+)\s+0\s+R", doc.xref_object(int(m.group(1))))
+        if not m:
+            return rec
+        wf = doc.xref_object(int(m.group(1)))
+        rec["present"] = True
+        refs = []
+        ms = re.search(r"/Sessions\s+(\d+)\s+0\s+R", wf)
+        if ms:
+            refs = re.findall(r"(\d+)\s+0\s+R", doc.xref_object(int(ms.group(1))))
+        else:
+            ms = re.search(r"/Sessions\s*\[([^\]]*)\]", wf)
+            refs = re.findall(r"(\d+)\s+0\s+R", ms.group(1)) if ms else []
+        for x in refs:
+            x = int(x)
+            if not doc.xref_is_stream(x):
+                continue
+            s = doc.xref_stream(x).decode("latin-1", "replace")
+            apps = re.findall(r"/RegistrationApp\s*\(([^)]*)\)", s)
+            regs = re.findall(r"/RegistrationName\s*\(([^)]*)\)", s)
+            ends = re.findall(r"/EndTime\s*/?\(?D:(\d{14})", s)
+            env = re.findall(r"/SessionEnv\s*/([^\s/]+)", s)
+            end = None
+            if ends:
+                end = _d.datetime.strptime(ends[-1], "%Y%m%d%H%M%S")
+            rec["sessions"].append({
+                "app": apps[0] if apps else "",
+                "env": re.sub(r"#([0-9A-Fa-f]{2})", lambda q: chr(int(q.group(1), 16)),
+                              env[0]) if env else "",
+                "reg": regs[0] if regs else "", "end": end})
+        mf = re.search(r"/FileMapping\s+(\d+)\s+0\s+R", wf)
+        if mf:
+            for fx in re.findall(r"(\d+)\s+0\s+R", doc.xref_object(int(mf.group(1)))):
+                mp = re.search(r"/DIPath\s*\(([^)]*)\)", doc.xref_object(int(fx)))
+                if mp:
+                    rec["path"] = mp.group(1)
+                    break
+    except Exception:  # noqa: BLE001
+        return rec
+    mfold = re.search(r"PDFeXpress/(\d+)/", rec["path"], re.I)
+    rec["folder"] = mfold.group(1) if mfold else ""
+    last = rec["sessions"][-1] if rec["sessions"] else {}
+    rec["end"] = last.get("end")
+    rec["express"] = bool(
+        "ieee-pdf-express" in rec["path"].lower()
+        or any(re.search(r"aptara|pdfexp", s["reg"], re.I) for s in rec["sessions"]))
+    # a later session by someone else (e.g. the author's own PitStop Pro) = edited afterwards
+    rec["last_is_express"] = bool(last) and bool(
+        re.search(r"aptara|pdfexp", last.get("reg", ""), re.I)
+        or "pitstop server" in (last.get("app", "") + " " + last.get("env", "")).lower())
+    return rec
+
+
 def _clip(text: str, n: int) -> str:
     text = " ".join(text.split())
     return text if len(text) <= n else text[: n - 3] + "..."
@@ -2032,9 +2100,29 @@ class Analyzer:
             if mm_:
                 stamp = (fname, mm_.group(1))
                 break
+        rec = _express_record(doc)
+        stamp_reported = False
         cdate, mdate = md.get("creationDate") or "", md.get("modDate") or ""
         self.res.measurements["PDF created"] = _pdf_date(cdate) or "-"
         self.res.measurements["PDF last modified"] = _pdf_date(mdate) or "-"
+        if stamp and stamp[0] == "XMP metadata" and creator != "-":
+            # eXpress writes the stamp into the document properties AND the XMP copy. Only the
+            # XMP copy left = a program rewrote the properties after certification.
+            if self.stage != "review":
+                comp.append({"rule": "Certified by IEEE PDF eXpress", "ok": False,
+                             "found": f"stamp only in the hidden XMP copy; the properties now "
+                                      f"say '{creator[:40]}'"})
+                self.add(ERROR, "PDF eXpress / Xplore",
+                         "The eXpress stamp has been removed from the document properties (only "
+                         f"a hidden copy is left; the properties now say \"{creator[:50]}\"): the "
+                         "PDF was re-saved or edited after IEEE PDF eXpress certified it.",
+                         detail="Acrobat's File > Properties - where IEEE checks - no longer shows "
+                                "the stamp. Submit the exact file eXpress e-mailed you, or run it "
+                                "through eXpress again.")
+            stamp = None
+            rec = dict(rec, express=False)      # already reported above
+            if self.stage != "review":
+                stamp_reported = True
         if stamp:
             self.res.measurements["IEEE PDF eXpress"] = f"certified {stamp[1]} ({stamp[0]} field)"
             comp.append({"rule": "Certified by IEEE PDF eXpress", "ok": True,
@@ -2058,9 +2146,66 @@ class Analyzer:
                     same = True
             else:
                 same = _same_date(cdate, mdate)
+
+            # the eXpress processing record (much harder to fake than the stamp text)
+            if rec["express"]:
+                when = rec["end"].strftime("%Y-%m-%d %H:%M:%S") if rec["end"] else "?"
+                where = f", eXpress conference folder {rec['folder']}" if rec["folder"] else ""
+                comp.append({"rule": "eXpress processing record", "ok": True,
+                             "found": f"Enfocus PitStop Server session ended {when}{where}"})
+                self.res.measurements["eXpress processing record"] = (
+                    f"PitStop Server session {when}{where}")
+                self.add(PASS, "PDF eXpress / Xplore", "The file contains the IEEE PDF eXpress "
+                         f"processing record (Enfocus PitStop Server, {when}{where}).",
+                         detail="eXpress checks every paper with Enfocus PitStop Server, which "
+                                "writes a processing log into the PDF. This log is much harder "
+                                "to fake than the stamp text."
+                                + (f" Server file: {rec['path']}" if rec["path"] else ""))
+                if st and rec["end"] and abs((st - rec["end"]).total_seconds()) > 300:
+                    self.add(WARNING, "PDF eXpress / Xplore",
+                             f"The stamp time ({stamp[1]}) and the time in the eXpress processing "
+                             f"record ({when}) differ.",
+                             detail="Normally they are the same second. Check the paper with the "
+                                    "eXpress confirmation e-mail.")
+                if not rec["last_is_express"]:
+                    same = False
+            else:
+                comp.append({"rule": "eXpress processing record", "ok": False,
+                             "found": "not found (only the stamp text)"})
+                self.add(WARNING, "PDF eXpress / Xplore",
+                         "The eXpress stamp is present, but the file has no eXpress processing "
+                         "record (the Enfocus PitStop log eXpress writes into every paper it "
+                         "checks).",
+                         detail="The stamp text can be typed into the file properties by hand; "
+                                "the processing record cannot easily be faked. Older eXpress "
+                                "output or source-file conversion may lack it, so this is only a "
+                                "warning: ask for the eXpress confirmation e-mail, or check the "
+                                "paper on the eXpress site.")
+            revs = getattr(doc, "version_count", 1) or 1
+            if revs > 1:
+                same = False
             comp.append({"rule": "Not modified after certification", "ok": same is not False,
                          "found": (f"stamp {stamp[1]}, last modified {_pdf_date(mdate)}"
-                                   if mdate else "dates not recorded")})
+                                   if mdate else "dates not recorded")
+                         + (f"; {revs} saved revisions" if revs > 1 else "")})
+            if revs > 1:
+                self.add(ERROR, "PDF eXpress / Xplore",
+                         f"The PDF was saved again after IEEE PDF eXpress certified it: it "
+                         f"contains {revs} saved revisions, while eXpress delivers one.",
+                         detail="Some program (Acrobat, Preview, an online editor, a signature "
+                                "tool) added changes on top of the certified file, even if the "
+                                "dates look unchanged. Submit the exact file eXpress e-mailed "
+                                "you, or run it through eXpress again.")
+                same = None                     # don't report the same problem twice
+            elif rec["express"] and not rec["last_is_express"]:
+                s = rec["sessions"][-1]
+                self.add(ERROR, "PDF eXpress / Xplore",
+                         "The PDF was edited after IEEE PDF eXpress certified it: its processing "
+                         f"log shows a later session by {s.get('app') or 'another program'}"
+                         + (f" ({s['reg']})" if s.get("reg") else "") + ".",
+                         detail="Submit the exact file eXpress e-mailed you, or run it through "
+                                "eXpress again.")
+                same = None
             if same is False:
                 self.add(ERROR, "PDF eXpress / Xplore",
                          f"The PDF was changed after IEEE PDF eXpress certified it (certified "
@@ -2069,7 +2214,7 @@ class Analyzer:
                                 "compressed, merged or signed afterwards, because the changes may "
                                 "break IEEE Xplore compatibility. Submit the exact file IEEE PDF "
                                 "eXpress e-mailed you, or run it through eXpress again.")
-        else:
+        elif not stamp_reported:
             other = re.search(r"pdf\s*-?\s*e?xpress", " ".join(fields.values()), re.I)
             if self.stage == "review":
                 comp.append({"rule": "Certified by IEEE PDF eXpress", "ok": True,
@@ -2083,7 +2228,15 @@ class Analyzer:
                              "found": "no certification stamp" + (
                                  " (eXpress is mentioned, but without the stamp)" if other
                                  else f" - made by {producer[:45]}")})
-            if spec.REQUIRE_PDF_EXPRESS and self.stage != "review":
+            if rec["express"] and self.stage != "review":
+                self.add(ERROR, "PDF eXpress / Xplore",
+                         "This PDF went through IEEE PDF eXpress (its processing record is still "
+                         "inside" + (f", conference folder {rec['folder']}" if rec["folder"]
+                                     else "") + "), but the certification stamp has been "
+                         "removed: the file was re-saved or edited after certification.",
+                         detail="Submit the exact file eXpress e-mailed you, without opening and "
+                                "saving it in another program, or run it through eXpress again.")
+            elif spec.REQUIRE_PDF_EXPRESS and self.stage != "review":
                 self.add(ERROR, "PDF eXpress / Xplore",
                          "This PDF is not certified by IEEE PDF eXpress: the stamp "
                          "'Certified by IEEE PDFeXpress at <date>' is missing from its "
@@ -2165,7 +2318,7 @@ class Analyzer:
             okv = (major, minor) <= (1, 7) and (major, minor) >= (1, 3)
         item("PDF version 1.3-1.7", okv, version, ERROR,
              "Save as PDF 1.4-1.7 (Acrobat 5-9 compatible); PDF 2.0 is not accepted.")
-        if all(c["ok"] for c in comp if not c["rule"].startswith(("Certified by", "Not modified after"))):
+        if all(c["ok"] for c in comp if not c["rule"].startswith(("Certified by", "Not modified after", "eXpress processing"))):
             self.add(PASS, "PDF eXpress / Xplore", "PDF meets the IEEE Xplore file rules "
                      "(fonts, security, bookmarks, links, attachments, version).")
 

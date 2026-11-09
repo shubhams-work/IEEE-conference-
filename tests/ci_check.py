@@ -136,6 +136,12 @@ def main():
     print(f"  [{'OK ' if ok else 'FAIL'}] detects a PDF edited after eXpress certification")
     if not ok:
         failures.append("PDF edited after certification not detected")
+    code, data = run(exe, os.path.join(SAMPLES, "express_resaved.pdf"), out)
+    errors = [f["message"] for f in data["findings"] if f["severity"] == "error"]
+    ok = any("saved again after ieee pdf express" in m.lower() for m in errors)
+    print(f"  [{'OK ' if ok else 'FAIL'}] detects a certified PDF re-saved with unchanged dates")
+    if not ok:
+        failures.append("re-saved certified PDF (2 revisions) not detected")
 
     # double-blind review stage (anonymity)
     code, data = run(exe, os.path.join(SAMPLES, "review_identifying.pdf"), out, "review")
