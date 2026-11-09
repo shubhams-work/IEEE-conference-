@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=IEEE Paper Format Checker
+Comment=Check an IEEE conference paper PDF for formatting problems (offline)
+Exec=ieee-paper-checker %f
+Icon=ieee-paper-checker
+Terminal=false
+Categories=Office;Education;
+MimeType=application/pdf;
+Keywords=IEEE;paper;format;PDF;conference;

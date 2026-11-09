@@ -1,0 +1,11 @@
+.venv/
+.buildenv/
+build/
+dist/
+*.spec
+__pycache__/
+*_IEEE_report.html
+*_IEEE_annotated.pdf
+
+# local test outputs
+*.log

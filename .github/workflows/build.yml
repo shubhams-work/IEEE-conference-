@@ -1,0 +1,78 @@
+name: Build installers
+# Builds installers for every platform:
+#   Windows : IEEE-Paper-Checker-Setup-<ver>.exe
+#   macOS   : IEEE-Paper-Checker-<ver>-macOS-arm64.dmg (Apple silicon) and -x86_64.dmg (Intel)
+#   Linux   : ieee-paper-checker_<ver>_amd64.deb and IEEE-Paper-Checker-<ver>-linux-x64.tar.gz
+# Run it from the Actions tab ("Run workflow"), or push a tag like v1.1.0 to also
+# publish the installers as a GitHub Release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write          # needed to attach installers to a Release
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+      - name: Build installer
+        shell: cmd
+        run: build_windows.bat
+      - name: Smoke test
+        shell: cmd
+        run: dist\IEEE-Paper-Checker\ieee-check.exe --help
+      - uses: actions/upload-artifact@v4
+        with: { name: windows-installer, path: "dist/*Setup*.exe" }
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with: { files: "dist/*Setup*.exe" }
+
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15-intel]      # Apple silicon (arm64), Intel (x86_64)
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Build .dmg
+        run: chmod +x build_mac.sh && ./build_mac.sh
+      - name: Smoke test
+        run: dist/IEEE-Paper-Checker.app/Contents/MacOS/IEEE-Paper-Checker --help
+      - uses: actions/upload-artifact@v4
+        with: { name: "macos-installer-${{ matrix.os }}", path: "dist/*.dmg" }
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with: { files: "dist/*.dmg" }
+
+  linux:
+    runs-on: ubuntu-22.04             # older base = runs on more distributions
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build dependencies
+        run: sudo apt-get update && sudo apt-get install -y python3-venv python3-tk binutils
+      - name: Build .deb and .tar.gz
+        run: chmod +x build_linux.sh && ./build_linux.sh
+      - name: Smoke test
+        run: dist/IEEE-Paper-Checker/ieee-check --help
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-installers
+          path: |
+            dist/*.deb
+            dist/*.tar.gz
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            dist/*.deb
+            dist/*.tar.gz

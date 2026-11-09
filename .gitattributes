@@ -1,0 +1,8 @@
+*.sh text eol=lf
+*.command text eol=lf
+installer/linux/* text eol=lf
+*.bat text eol=crlf
+*.iss text eol=crlf
+*.png binary
+*.ico binary
+*.icns binary
