@@ -20,7 +20,7 @@ CONF_MARGINS = {"top": 0.75 * INCH, "bottom": 0.75 * INCH,      # 19 mm
                 "left": 0.625 * INCH, "right": 0.625 * INCH}    # 16 mm
 COLUMN_GAP = 4.22 * MM          # space between the two columns
 COLUMN_GAP_RANGE = (4.0 * MM, 5.8 * MM)   # accepted (covers 4.22 mm and 0.22 in)
-REQUIRE_PDF_EXPRESS = True      # report whether the PDF came from IEEE PDF eXpress
+REQUIRE_PDF_EXPRESS = True      # paper must carry the "Certified by IEEE PDFeXpress" stamp
 UNCITED_REFERENCE_IS_ERROR = True   # every reference must be cited in the text
 # =============================================================================
 

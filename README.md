@@ -21,10 +21,10 @@ computer needs nothing else.
 
 | System  | Installer | How to install |
 |---------|-----------|----------------|
-| Windows 10/11 | `IEEE-Paper-Checker-Setup-1.2.0.exe` | Double-click and follow the wizard. No admin rights needed (you can choose "all users"). Adds Start Menu and desktop shortcuts, a **"Check IEEE format"** entry when you right-click a PDF, and an uninstaller in *Settings → Apps*. If SmartScreen appears: *More info → Run anyway*. |
-| macOS   | `IEEE-Paper-Checker-1.2.0-macOS-arm64.dmg` (Apple silicon M1–M4) or `...-x86_64.dmg` (Intel) | Open the .dmg and drag the app onto *Applications*. The app is unsigned, so the first start is blocked: open it once, then go to *System Settings → Privacy & Security* and click **Open Anyway** (on macOS 14 and older you can instead right-click the app → *Open*). Alternative in Terminal: `xattr -dr com.apple.quarantine /Applications/IEEE-Paper-Checker.app`. Uninstall: drag it to the Bin. |
-| Ubuntu / Debian / Mint | `ieee-paper-checker_1.2.0_amd64.deb` | Double-click (Software Center) or `sudo apt install ./ieee-paper-checker_1.2.0_amd64.deb`. Uninstall: `sudo apt remove ieee-paper-checker`. |
-| Other Linux | `IEEE-Paper-Checker-1.2.0-linux-x64.tar.gz` | Unpack, then run `./install.sh` (no sudo). Uninstall: `./install.sh --uninstall`. |
+| Windows 10/11 | `IEEE-Paper-Checker-Setup-1.3.0.exe` | Double-click and follow the wizard. No admin rights needed (you can choose "all users"). Adds Start Menu and desktop shortcuts, a **"Check IEEE format"** entry when you right-click a PDF, and an uninstaller in *Settings → Apps*. If SmartScreen appears: *More info → Run anyway*. |
+| macOS   | `IEEE-Paper-Checker-1.3.0-macOS-arm64.dmg` (Apple silicon M1–M4) or `...-x86_64.dmg` (Intel) | Open the .dmg and drag the app onto *Applications*. The app is unsigned, so the first start is blocked: open it once, then go to *System Settings → Privacy & Security* and click **Open Anyway** (on macOS 14 and older you can instead right-click the app → *Open*). Alternative in Terminal: `xattr -dr com.apple.quarantine /Applications/IEEE-Paper-Checker.app`. Uninstall: drag it to the Bin. |
+| Ubuntu / Debian / Mint | `ieee-paper-checker_1.3.0_amd64.deb` | Double-click (Software Center) or `sudo apt install ./ieee-paper-checker_1.3.0_amd64.deb`. Uninstall: `sudo apt remove ieee-paper-checker`. |
+| Other Linux | `IEEE-Paper-Checker-1.3.0-linux-x64.tar.gz` | Unpack, then run `./install.sh` (no sudo). Uninstall: `./install.sh --uninstall`. |
 
 After installing, open **IEEE Paper Format Checker** from the Start Menu,
 Launchpad or applications menu, or right-click a PDF and choose it.
@@ -33,7 +33,7 @@ Launchpad or applications menu, or right-click a PDF and choose it.
 
 * **Automatically on GitHub (all systems at once).** Push this folder to a GitHub
   repository, open *Actions → Build installers → Run workflow*, and download the
-  installers from the finished run. Pushing a tag such as `v1.2.0` also publishes
+  installers from the finished run. Pushing a tag such as `v1.3.0` also publishes
   them as a Release.
 * **On your own computer.** A computer can only build its own system's installer:
   * Windows: install Python and [Inno Setup](https://jrsoftware.org/isdl.php) (version 6 or 7), then run `build_windows.bat`
@@ -72,14 +72,16 @@ The exit code is 1 if any error is found, so the command can be used in scripts 
 | **Page count** | 4-6 pages (editable in the app) | Error above max, Warning below min |
 | **Citations** | Every reference in the list is cited in the text as [n]; every [n] exists in the list; no duplicate numbers; numbered in order of first citation; no author-year citations | Error (order: Warning) |
 | **In-text references** | Every figure and table is referred to in the text; no references to figures, tables, equations or sections that do not exist (e.g. "Fig. 7" when there are 5 figures) | Error |
-| **IEEE PDF eXpress** | Whether the PDF carries the IEEE PDF eXpress mark | Warning (see note) |
+| **IEEE PDF eXpress certification** | The PDF carries the stamp *"Certified by IEEE PDFeXpress at MM/DD/YYYY HH:MM:SS AM/PM"* in its properties (written by IEEE PDF eXpress into every approved paper), and it was **not changed after certification** (creation date = last-modified date, as IEEE asks organisers to verify) | Error |
 | **IEEE Xplore file rules** (what PDF eXpress checks) | All fonts embedded and subset, no Type 3 fonts, no password/security, no bookmarks, no hyperlinks, no attachments, not a portfolio, no JavaScript, no form fields, no comments, PDF version 1.3-1.7 | Error (links/subsetting: Warning) |
 
-**About the PDF eXpress check:** a PDF that IEEE PDF eXpress *converted* from
-your source files can be recognised. eXpress's *PDF Check* function returns your
-own file unchanged, so such a file cannot be told apart from the file itself.
-Keep the eXpress approval e-mail. The checker still verifies every Xplore rule
-that eXpress tests.
+**About the PDF eXpress check:** every paper approved by IEEE PDF eXpress
+(PDF Check or Conversion) contains the text *"Certified by IEEE PDFeXpress at
+<date> <time>"* in its document properties (you can see it in Acrobat Reader
+under File > Properties). If the stamp is missing, the paper did not go through
+eXpress. If the file was edited, re-saved, compressed or merged after approval,
+its last-modified date no longer matches its creation date and the checker
+reports it. Submit exactly the file eXpress e-mailed back.
 
 ## Other checks
 

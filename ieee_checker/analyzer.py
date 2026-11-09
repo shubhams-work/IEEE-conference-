@@ -91,6 +91,47 @@ def is_math(font: str) -> bool:
     return any(p.replace(" ", "") in f.replace(" ", "") for p in spec.MATH_FONT_PATTERNS)
 
 
+def _parse_pdf_date(s: str):
+    """'D:20240315112233+05'30'' -> (datetime-naive, utc-offset-minutes or None)."""
+    import datetime as _d
+    m = re.match(r"D?:?(\d{4})(\d{2})?(\d{2})?(\d{2})?(\d{2})?(\d{2})?([Zz+\-])?(\d{2})?'?(\d{2})?",
+                 s or "")
+    if not m:
+        return None
+    y, mo, d, h, mi, se = (int(m.group(i) or dflt) for i, dflt in
+                           zip(range(1, 7), (0, 1, 1, 0, 0, 0)))
+    try:
+        dt = _d.datetime(y, mo, d, h, mi, se)
+    except ValueError:
+        return None
+    off = None
+    if m.group(7) in ("Z", "z"):
+        off = 0
+    elif m.group(7) in ("+", "-") and m.group(8):
+        off = (int(m.group(8)) * 60 + int(m.group(9) or 0)) * (1 if m.group(7) == "+" else -1)
+    return dt, off
+
+
+def _pdf_date(s: str) -> str:
+    p = _parse_pdf_date(s)
+    if not p:
+        return ""
+    dt, off = p
+    tz = "" if off is None else f" UTC{'+' if off >= 0 else '-'}{abs(off) // 60:02d}:{abs(off) % 60:02d}"
+    return dt.strftime("%Y-%m-%d %H:%M:%S") + tz
+
+
+def _same_date(a: str, b: str):
+    """True/False if both dates exist (2 s tolerance), None if one is missing."""
+    import datetime as _d
+    pa, pb = _parse_pdf_date(a), _parse_pdf_date(b)
+    if not pa or not pb:
+        return None
+    da = pa[0] - _d.timedelta(minutes=pa[1] or 0)
+    db = pb[0] - _d.timedelta(minutes=pb[1] or 0)
+    return abs((da - db).total_seconds()) <= 2
+
+
 def fmt_in(pt: float) -> str:
     return f"{pt / 72:.2f} in ({pt / spec.MM:.1f} mm)"
 
@@ -1420,26 +1461,61 @@ class Analyzer:
             if not ok:
                 self.add(sev, "PDF eXpress / Xplore", f"{rule}: {found}", detail=fix)
 
-        # 1. created / converted by IEEE PDF eXpress?
-        hay = " ".join([producer, creator, md.get("subject") or "", md.get("keywords") or "",
-                        md.get("title") or "", xmp])
-        express = re.search(r"pdf\s*-?\s*e?xpress|pdfexpress", hay, re.I)
-        if express:
-            comp.append({"rule": "Created by IEEE PDF eXpress", "ok": True,
-                         "found": f"yes (Producer: {producer})"})
-            self.add(PASS, "PDF eXpress / Xplore", "The PDF carries the IEEE PDF eXpress mark.",
-                     detail=f"Producer: {producer}; Creator: {creator}")
-        elif spec.REQUIRE_PDF_EXPRESS:
-            comp.append({"rule": "Created by IEEE PDF eXpress", "ok": False,
-                         "found": f"no eXpress mark (Producer: {producer[:50]})"})
-            self.add(WARNING, "PDF eXpress / Xplore",
-                     "No IEEE PDF eXpress mark found in this PDF. It appears to be made by: "
-                     f"{producer[:60]}" + (f" / {creator[:40]}" if creator != "-" else "") + ".",
-                     detail="Convert the paper with IEEE PDF eXpress (ieee-pdf-express.org, "
-                            "use your conference ID) and submit the PDF it e-mails back. Note: "
-                            "eXpress's 'PDF Check' returns your own file unchanged, so a checked "
-                            "PDF cannot be recognised from the file itself - keep the eXpress "
-                            "approval e-mail as proof.")
+        # 1. certified by IEEE PDF eXpress?
+        # An IEEE-certified paper carries in its metadata (usually the Creator field):
+        #   "Certified by IEEE PDFeXpress at MM/DD/YYYY HH:MM:SS AM/PM"
+        # and IEEE asks organisers to verify that creation date == modification date,
+        # because a PDF changed after certification may no longer be Xplore-compatible.
+        fields = {"Creator": creator, "Producer": producer, "Subject": md.get("subject") or "",
+                  "Keywords": md.get("keywords") or "", "Title": md.get("title") or "",
+                  "Author": md.get("author") or "", "XMP metadata": xmp}
+        stamp_re = re.compile(r"Certified\s+by\s+IEEE\.?\s*PDF\s*e?Xpress\s+at\s+"
+                              r"(\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*[AP]M)", re.I)
+        stamp = None
+        for fname, val in fields.items():
+            mm_ = stamp_re.search(val or "")
+            if mm_:
+                stamp = (fname, mm_.group(1))
+                break
+        cdate, mdate = md.get("creationDate") or "", md.get("modDate") or ""
+        self.res.measurements["PDF created"] = _pdf_date(cdate) or "-"
+        self.res.measurements["PDF last modified"] = _pdf_date(mdate) or "-"
+        if stamp:
+            self.res.measurements["IEEE PDF eXpress"] = f"certified {stamp[1]} ({stamp[0]} field)"
+            comp.append({"rule": "Certified by IEEE PDF eXpress", "ok": True,
+                         "found": f"yes - 'Certified by IEEE PDFeXpress at {stamp[1]}' "
+                                  f"in the {stamp[0]} field"})
+            self.add(PASS, "PDF eXpress / Xplore", f"Certified by IEEE PDF eXpress at "
+                     f"{stamp[1]}.", detail=f"Stamp found in the PDF's {stamp[0]} field.")
+            same = _same_date(cdate, mdate)
+            comp.append({"rule": "Not modified after certification", "ok": same is not False,
+                         "found": (f"created {_pdf_date(cdate)}, modified {_pdf_date(mdate)}"
+                                   if cdate and mdate else "dates not recorded")})
+            if same is False:
+                self.add(ERROR, "PDF eXpress / Xplore",
+                         "The PDF was changed after IEEE PDF eXpress certified it (creation date "
+                         f"{_pdf_date(cdate)} differs from last-modified date {_pdf_date(mdate)}).",
+                         detail="IEEE rejects certified PDFs that were edited, re-saved, "
+                                "compressed, merged or signed afterwards, because the changes may "
+                                "break IEEE Xplore compatibility. Submit the exact file IEEE PDF "
+                                "eXpress e-mailed you, or run it through eXpress again.")
+        else:
+            other = re.search(r"pdf\s*-?\s*e?xpress", " ".join(fields.values()), re.I)
+            comp.append({"rule": "Certified by IEEE PDF eXpress", "ok": False,
+                         "found": "no certification stamp" + (" (eXpress is mentioned, but "
+                                                              "without the stamp)" if other else
+                                                              f" - made by {producer[:45]}")})
+            if spec.REQUIRE_PDF_EXPRESS:
+                self.add(ERROR, "PDF eXpress / Xplore",
+                         "This PDF is not certified by IEEE PDF eXpress: the stamp "
+                         "'Certified by IEEE PDFeXpress at <date>' is missing from its "
+                         "properties. It was made by: " + f"{producer[:60]}"
+                         + (f" / {creator[:40]}" if creator != "-" else "") + ".",
+                         detail="Log in to ieee-pdf-express.org with your conference ID, use "
+                                "'Submit PDF for Checking' (or 'Submit Source Files for "
+                                "Conversion'), and submit the approved PDF that eXpress e-mails "
+                                "back to you without changing it. You can see the stamp in "
+                                "Acrobat Reader under File > Properties.")
         # 2. fonts embedded and subset
         not_sub, t3, not_emb = set(), set(), set()
         for page in doc:
@@ -1511,7 +1587,7 @@ class Analyzer:
             okv = (major, minor) <= (1, 7) and (major, minor) >= (1, 3)
         item("PDF version 1.3-1.7", okv, version, ERROR,
              "Save as PDF 1.4-1.7 (Acrobat 5-9 compatible); PDF 2.0 is not accepted.")
-        if all(c["ok"] for c in comp if c["rule"] != "Created by IEEE PDF eXpress"):
+        if all(c["ok"] for c in comp if not c["rule"].startswith(("Certified by", "Not modified after"))):
             self.add(PASS, "PDF eXpress / Xplore", "PDF meets the IEEE Xplore file rules "
                      "(fonts, security, bookmarks, links, attachments, version).")
 

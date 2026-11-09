@@ -308,7 +308,7 @@ def _summary_html(res, n_paper_pages):
         rows = []
         for c in res.compliance:
             cls = "good" if c["ok"] else ("warn" if c["rule"].startswith(
-                ("Created by", "Fonts subset", "No hyperlinks")) else "bad")
+                ("Fonts subset", "No hyperlinks")) else "bad")
             rows.append(f"<tr><td>{e(c['rule'])}</td><td class='{cls}'><b>"
                         f"{'OK' if c['ok'] else 'CHECK' if cls == 'warn' else 'FAIL'}</b></td>"
                         f"<td>{e(str(c['found']))}</td></tr>")

@@ -75,7 +75,7 @@ def write_html(res: Result, out_path: str):
     from . import spec as _spec
     comp = table(["IEEE PDF eXpress / Xplore rule", "Result", "Found"],
                  [[e(c["rule"]), status_cell("OK" if c["ok"] else (
-                     "CHECK" if c["rule"].startswith(("Created by", "Fonts subset", "No hyperlinks"))
+                     "CHECK" if c["rule"].startswith(("Fonts subset", "No hyperlinks"))
                      else "FAIL")), e(str(c["found"]))] for c in res.compliance]) \
         if res.compliance else ""
     n_unc = sum(1 for c in res.citations if c["status"] != "cited")
