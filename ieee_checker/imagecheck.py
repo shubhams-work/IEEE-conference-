@@ -133,12 +133,32 @@ def table_likeness(gray: np.ndarray) -> dict:
     col_frac = dark.mean(axis=0)
     hline_rows = row_frac > 0.55
     vline_cols = col_frac > 0.55
-    hlines = len(_runs(hline_rows))
-    vlines = len(_runs(vline_cols))
+    # table rules are thin; thick dark runs are bars of a bar chart, filled boxes, etc.
+    hlines = len([r for r in _runs(hline_rows) if r[1] <= max(4, 0.015 * h)])
+    vlines = len([r for r in _runs(vline_cols) if r[1] <= max(4, 0.015 * w)])
 
     # text bands: rows with some ink, not being a rule, separated by white rows
     ink_rows = (row_frac > 0.004) & ~hline_rows
     bands = [r for r in _runs(ink_rows) if r[1] >= 3]
+
+    def _longest_run(row):
+        if not row.any():
+            return 0
+        d = np.diff(np.concatenate(([0], row.astype(np.int8), [0])))
+        return int((np.flatnonzero(d == -1) - np.flatnonzero(d == 1)).max())
+
+    def _texty(band):
+        # a text row is many short glyph pieces; a bar / plot line is one long solid run
+        # (solid rectangle); a table row also spreads across the cells, unlike the
+        # letters of a rotated axis label stacked in one narrow column
+        s, n = band
+        runs = sorted(_longest_run(dark[r]) for r in range(s, s + n))
+        med = runs[len(runs) // 2]
+        cols = np.flatnonzero(dark[s:s + n].any(axis=0) & ~vline_cols)   # skip frame lines
+        spread = (cols[-1] - cols[0]) if cols.size else 0
+        return med < min(0.12 * w, 2.0 * n) and spread > 0.25 * w
+
+    bands = [b for b in bands if _texty(b)]
     band_heights = [b[1] for b in bands]
     small_bands = [b for b in band_heights if b < 0.12 * h]
     text_bands = len(small_bands)
@@ -150,12 +170,15 @@ def table_likeness(gray: np.ndarray) -> dict:
     # within text bands, ink should be broken into many glyph-like pieces
     score = 0.0
     if whiteness > 0.6:
-        if hlines >= 2:
-            score += 0.35
-        if hlines >= 3:
-            score += 0.15
-        if vlines >= 2:
-            score += 0.15
+        if hlines == 2 and vlines == 2:
+            score += 0.15          # just a box: the frame of a plot / diagram
+        else:
+            if hlines >= 2:
+                score += 0.35
+            if hlines >= 3:
+                score += 0.15
+            if vlines >= 2:
+                score += 0.15
         if text_bands >= 4:
             score += 0.2
         if regular:

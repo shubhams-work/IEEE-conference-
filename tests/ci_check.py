@@ -121,6 +121,22 @@ def main():
         print("  [OK ] clean sample only lacks the PDF eXpress stamp")
     check_outputs(out, "sample_ok", failures)
 
+    # real-world eXpress stamp format ("Certified by IEEE PDFExpress at October 28, 2026 16:40:27")
+    code, data = run(exe, os.path.join(SAMPLES, "express_certified.pdf"), out)
+    errors = [f["message"] for f in data["findings"] if f["severity"] == "error"]
+    ok = not any("certified" in m.lower() for m in errors) and any(
+        f["severity"] == "pass" and "certified by ieee pdf express" in f["message"].lower()
+        for f in data["findings"])
+    print(f"  [{'OK ' if ok else 'FAIL'}] accepts a genuine eXpress stamp (date written out)")
+    if not ok:
+        failures.append("genuine eXpress stamp not accepted: " + "; ".join(errors)[:300])
+    code, data = run(exe, os.path.join(SAMPLES, "express_modified.pdf"), out)
+    errors = [f["message"] for f in data["findings"] if f["severity"] == "error"]
+    ok = any("changed after ieee pdf express certified" in m.lower() for m in errors)
+    print(f"  [{'OK ' if ok else 'FAIL'}] detects a PDF edited after eXpress certification")
+    if not ok:
+        failures.append("PDF edited after certification not detected")
+
     # double-blind review stage (anonymity)
     code, data = run(exe, os.path.join(SAMPLES, "review_identifying.pdf"), out, "review")
     msgs = [f["message"] for f in data["findings"] if f["severity"] in ("error", "warning")]

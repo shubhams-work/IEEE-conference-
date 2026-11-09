@@ -141,6 +141,20 @@ def _same_date(a: str, b: str):
     return abs((da - db).total_seconds()) <= 2
 
 
+def _parse_stamp_date(s: str):
+    """Parse the date in an eXpress stamp ('10/28/2026 4:40:27 PM', 'October 28, 2026 16:40:27')."""
+    import datetime as _d
+    s = " ".join(s.replace(",", " ").replace(".", " ").split())
+    for fmt in ("%m/%d/%Y %I:%M:%S %p", "%m/%d/%Y %I:%M %p", "%B %d %Y %H:%M:%S",
+                "%b %d %Y %H:%M:%S", "%B %d %Y %H:%M", "%b %d %Y %H:%M", "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%d %H:%M", "%B %d %Y %I:%M:%S %p", "%b %d %Y %I:%M:%S %p"):
+        try:
+            return _d.datetime.strptime(s, fmt)
+        except ValueError:
+            pass
+    return None
+
+
 def _clip(text: str, n: int) -> str:
     text = " ".join(text.split())
     return text if len(text) <= n else text[: n - 3] + "..."
@@ -1106,7 +1120,13 @@ class Analyzer:
                 ib = pymupdf.Rect(info["bbox"])
                 inside = (min(ib.x1, xr[1]) - max(ib.x0, xr[0])) / max(ib.width, 1)
                 if inside > 0.5 and bx.y1 - 6 <= ib.y0 <= bx.y1 + 90 and ib.height > 15:
-                    cand.append(ib)
+                    # text between the caption and the image = the table body is real text
+                    # (the image is a figure placed after the table)
+                    gap = pymupdf.Rect(xr[0], bx.y1 - 1, xr[1], ib.y0 + 1)
+                    gap_chars = sum(len(tx.strip()) for rc, tx, _, _ in self.spans[pno]
+                                    if gap.contains((rc.tl + rc.br) / 2) and not bx.contains(rc))
+                    if gap_chars < 20:
+                        cand.append(ib)
             cand.sort(key=lambda b: b.y0)
             if cand:
                 ib = cand[0]
@@ -1238,7 +1258,14 @@ class Analyzer:
                     t["page"] == pno + 1 and t["rect"] and
                     pymupdf.Rect(t["rect"]).intersects(bbox) for t in self.res.tables
                     if t["status"].startswith("PASTED"))
-                if ana and ana["table_score"] >= 0.7 and not is_table_img:
+                # an image with its own "Fig. N" caption right below it is a figure (chart,
+                # diagram); only flag it when it looks very much like a table
+                has_fig_cap = any(
+                    f["line"].page == pno and 0 <= f["line"].bbox.y0 - bbox.y1 < 30
+                    and min(f["line"].bbox.x1, bbox.x1) - max(f["line"].bbox.x0, bbox.x0) > 0
+                    for f in getattr(self, "figs", []))
+                need_score = 0.85 if has_fig_cap else 0.7
+                if ana and ana["table_score"] >= need_score and not is_table_img:
                     self.add(WARNING, "Tables", "This image looks like a table or text "
                              "screenshot. Tables must be typed as real tables, not pasted as "
                              "pictures.", page=pno + 1, rect=rect_t(bbox), thumb=True,
@@ -1759,6 +1786,15 @@ class Analyzer:
         # 11. camera-ready: IEEE copyright notice at the bottom of page 1 ------------
         if self.stage != "review":
             cr = getattr(self, "copyright_line", None)
+            if not cr:
+                # \IEEEpubid often puts the line just inside the text area, not in the margin
+                h0 = self.page_rects[0].height
+                for o in self.lines:
+                    if o.page == 0 and o.bbox.y0 > 0.8 * h0 and re.search(
+                            r"97[89]-?\d[\d-]{8,}|/\d{2}/\$\d+\.\d{2}|"
+                            r"(©|\(c\)|copyright)\s*\d{4}\s*IEEE", o.text, re.I):
+                        cr = self.copyright_line = (1, rect_t(o.bbox), o.text.strip())
+                        break
             if cr:
                 self.add(PASS, T, "IEEE copyright notice found at the bottom of page 1.",
                          detail=cr[2][:120])
@@ -1985,8 +2021,11 @@ class Analyzer:
         fields = {"Creator": creator, "Producer": producer, "Subject": md.get("subject") or "",
                   "Keywords": md.get("keywords") or "", "Title": md.get("title") or "",
                   "Author": md.get("author") or "", "XMP metadata": xmp}
-        stamp_re = re.compile(r"Certified\s+by\s+IEEE\.?\s*PDF\s*e?Xpress\s+at\s+"
-                              r"(\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*[AP]M)", re.I)
+        # seen in the wild: "... at 10/28/2026 4:40:27 PM" and "... at October 28, 2026 16:40:27"
+        stamp_re = re.compile(r"Certified\s+by\s+IEEE\.?\s*PDF\s*-?\s*e?Xpress\s+at\s+"
+                              r"((?:\d{1,2}/\d{1,2}/\d{4}|[A-Za-z]{3,9}\.?\s+\d{1,2},?\s+\d{4}"
+                              r"|\d{4}-\d{2}-\d{2})\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]M)?)",
+                              re.I)
         stamp = None
         for fname, val in fields.items():
             mm_ = stamp_re.search(val or "")
@@ -2003,14 +2042,29 @@ class Analyzer:
                                   f"in the {stamp[0]} field"})
             self.add(PASS, "PDF eXpress / Xplore", f"Certified by IEEE PDF eXpress at "
                      f"{stamp[1]}.", detail=f"Stamp found in the PDF's {stamp[0]} field.")
-            same = _same_date(cdate, mdate)
+            # eXpress sets the modification date to the moment of certification (the creation
+            # date is often kept from the original file). So the file is untouched if its
+            # last-modified time equals the stamp time - or, for older eXpress output, if
+            # creation == modification.
+            st = _parse_stamp_date(stamp[1])
+            pm = _parse_pdf_date(mdate)
+            if st and pm:
+                import datetime as _d
+                wall = pm[0]                                        # modDate local clock
+                utc = pm[0] - _d.timedelta(minutes=pm[1] or 0)
+                same = min(abs((st - wall).total_seconds()),
+                           abs((st - utc).total_seconds())) <= 120
+                if not same and _same_date(cdate, mdate):
+                    same = True
+            else:
+                same = _same_date(cdate, mdate)
             comp.append({"rule": "Not modified after certification", "ok": same is not False,
-                         "found": (f"created {_pdf_date(cdate)}, modified {_pdf_date(mdate)}"
-                                   if cdate and mdate else "dates not recorded")})
+                         "found": (f"stamp {stamp[1]}, last modified {_pdf_date(mdate)}"
+                                   if mdate else "dates not recorded")})
             if same is False:
                 self.add(ERROR, "PDF eXpress / Xplore",
-                         "The PDF was changed after IEEE PDF eXpress certified it (creation date "
-                         f"{_pdf_date(cdate)} differs from last-modified date {_pdf_date(mdate)}).",
+                         f"The PDF was changed after IEEE PDF eXpress certified it (certified "
+                         f"{stamp[1]}, but last modified {_pdf_date(mdate)}).",
                          detail="IEEE rejects certified PDFs that were edited, re-saved, "
                                 "compressed, merged or signed afterwards, because the changes may "
                                 "break IEEE Xplore compatibility. Submit the exact file IEEE PDF "
