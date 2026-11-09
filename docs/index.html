@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IEEE Paper Format Checker - Download</title>
+<meta name="description" content="Free offline tool that checks IEEE conference papers (PDF) for formatting problems: A4 size, margins, two columns, citations, in-text references, IEEE PDF eXpress certification, tables pasted as images and image quality. Windows, macOS and Linux.">
+<link rel="icon" type="image/png" href="assets/icon.png">
+<style>
+:root {
+  --bg: #f6f7f9; --card: #ffffff; --fg: #17202b; --muted: #5d6b7c; --line: #e1e6ec;
+  --accent: #0a66d8; --accent-fg: #ffffff; --accent-soft: #e7f0fc;
+  --ok: #1e7f3a; --err: #c62828; --warn: #a65f00; --shadow: 0 1px 2px rgba(16,24,40,.06), 0 6px 24px rgba(16,24,40,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1318; --card: #171c23; --fg: #e8ecf1; --muted: #9aa7b6; --line: #27303a;
+    --accent: #4c9bff; --accent-fg: #0b1220; --accent-soft: #15243a;
+    --ok: #6fd08c; --err: #ff8a80; --warn: #ffb74d; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 24px rgba(0,0,0,.35);
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif; }
+a { color: var(--accent); }
+.wrap { max-width: 1060px; margin: 0 auto; padding: 0 20px; }
+header.top { border-bottom: 1px solid var(--line); background: var(--card); }
+header.top .wrap { display: flex; align-items: center; justify-content: space-between; height: 60px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--fg); text-decoration: none; }
+.brand img { width: 30px; height: 30px; border-radius: 7px; }
+nav a { color: var(--muted); text-decoration: none; margin-left: 20px; font-size: 15px; }
+nav a:hover { color: var(--fg); }
+.hero { padding: 64px 20px 40px; text-align: center; }
+.logo-big { width: 104px; height: 104px; border-radius: 24px; box-shadow: var(--shadow); }
+h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.15; margin: 22px 0 12px; letter-spacing: -0.02em; }
+.tag { font-size: clamp(17px, 2.2vw, 20px); color: var(--muted); max-width: 720px; margin: 0 auto; }
+.cta { margin: 32px 0 10px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 26px; border-radius: 12px;
+  background: var(--accent); color: var(--accent-fg); font-weight: 650; font-size: 18px; text-decoration: none;
+  box-shadow: var(--shadow); transition: transform .08s ease, filter .15s ease; }
+.btn:hover { filter: brightness(1.07); transform: translateY(-1px); }
+.btn svg { width: 22px; height: 22px; }
+.meta { color: var(--muted); font-size: 14px; }
+.pills { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
+.pill { font-size: 13px; padding: 4px 11px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--card); }
+section { padding: 40px 0; }
+h2 { font-size: 26px; margin: 0 0 6px; letter-spacing: -0.01em; }
+.sub { color: var(--muted); margin: 0 0 22px; }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.grid.three { grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; box-shadow: var(--shadow); }
+.dl { display: flex; flex-direction: column; gap: 6px; }
+.dl.mine { outline: 2px solid var(--accent); }
+.dl h3 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+.dl h3 svg { width: 22px; height: 22px; }
+.dl .what { color: var(--muted); font-size: 14px; min-height: 42px; }
+.dl a.get { margin-top: 8px; display: inline-flex; justify-content: center; padding: 10px 14px; border-radius: 10px;
+  background: var(--accent-soft); color: var(--accent); font-weight: 650; text-decoration: none; }
+.dl a.get:hover { filter: brightness(0.97); }
+.dl a.get.alt { background: transparent; border: 1px solid var(--line); margin-top: 4px; }
+.dl .file { font-size: 12.5px; color: var(--muted); word-break: break-all; }
+.badge { font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 2px 8px; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.tabs button { font: inherit; font-size: 15px; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--card); color: var(--fg); cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.panel { display: none; } .panel.on { display: block; }
+.panel ol { margin: 0; padding-left: 22px; } .panel li { margin: 6px 0; }
+code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.9em; background: var(--accent-soft);
+  padding: 1px 6px; border-radius: 6px; word-break: break-word; }
+.note { font-size: 14px; color: var(--muted); margin-top: 12px; }
+.feat h3 { margin: 0 0 6px; font-size: 17px; }
+.feat p { margin: 0; color: var(--muted); font-size: 15px; }
+.feat .ico { font-size: 22px; line-height: 1; margin-bottom: 10px; }
+.shot { margin: 0; }
+.shot img { width: 100%; height: auto; display: block; border-radius: 12px; border: 1px solid var(--line); box-shadow: var(--shadow); background: #fff; }
+.shot figcaption { color: var(--muted); font-size: 14px; margin-top: 8px; text-align: center; }
+.shots { display: grid; gap: 22px; grid-template-columns: 1fr; }
+@media (min-width: 900px) { .shots { grid-template-columns: 1.15fr 1fr; align-items: start; } }
+table.rules { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+table.rules th, table.rules td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 15px; }
+table.rules th { color: var(--muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+.tw { overflow-x: auto; }
+footer { border-top: 1px solid var(--line); padding: 26px 0 40px; color: var(--muted); font-size: 14px; }
+footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+@media (max-width: 640px) { nav a:not(.gh) { display: none; } .hero { padding-top: 44px; } h1 br { display: none; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#"><img src="assets/icon.png" alt="">IEEE Paper Format Checker</a>
+    <nav>
+      <a href="#download">Download</a>
+      <a href="#install">Install</a>
+      <a href="#features">Features</a>
+      <a class="gh" id="gh-link" href="https://github.com/shubhams-work/IEEE-conference-">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<div class="hero wrap">
+  <img class="logo-big" src="assets/icon.png" alt="IEEE Paper Format Checker logo">
+  <h1>Check your IEEE conference paper<br>before you submit it</h1>
+  <p class="tag">A free desktop app that finds formatting problems in your PDF in seconds and shows exactly where they are. It works offline, so your paper never leaves your computer.</p>
+  <div class="cta">
+    <a class="btn" id="main-btn" href="https://github.com/shubhams-work/IEEE-conference-/releases/latest">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+      <span id="main-label">Download</span>
+    </a>
+    <div class="meta" id="main-meta">Free · Windows, macOS and Linux</div>
+  </div>
+  <div class="pills">
+    <span class="pill">A4 &amp; margins</span><span class="pill">Two-column layout</span>
+    <span class="pill">Citations</span><span class="pill">In-text references</span>
+    <span class="pill">IEEE PDF eXpress</span><span class="pill">Tables &amp; images</span>
+  </div>
+</div>
+
+<section id="download">
+  <div class="wrap">
+    <h2>Download</h2>
+    <p class="sub" id="dl-sub">Choose your system. Each installer includes everything it needs, so you don't need to install Python or anything else.</p>
+    <div class="grid" id="dl-grid">
+      <div class="card dl" data-card="win">
+        <h3><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5 10.5 4.4v7.1H3zm8.5-1.2L21 3v8.5h-9.5zM3 12.5h7.5v7.1L3 18.5zm8.5 0H21V21l-9.5-1.3z"/></svg>Windows</h3>
+        <div class="what">Windows 10 and 11 (64-bit). Setup wizard with Start Menu shortcut and right-click "Check IEEE format".</div>
+        <a class="get" data-asset="win" href="https://github.com/shubhams-work/IEEE-conference-/releases/latest">Download .exe</a>
+        <div class="file" data-asset="win"></div>
+      </div>
+      <div class="card dl" data-card="mac-arm">
+        <h3><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.6c0-2.4 2-3.5 2-3.6-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.2-2.8.8-3.5.8-.7 0-1.8-.8-3-.8-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.2.8 1.1 1.7 2.3 2.9 2.3 1.2-.1 1.6-.7 3-.7s1.8.7 3 .7c1.3 0 2.1-1.1 2.8-2.2.9-1.3 1.3-2.5 1.3-2.6 0 0-2.5-1-2.5-3.6zM14.2 5.6c.6-.8 1.1-1.8 1-2.9-.9 0-2.1.6-2.7 1.4-.6.7-1.1 1.8-1 2.8 1 .1 2.1-.5 2.7-1.3z"/></svg>macOS · Apple silicon</h3>
+        <div class="what">Macs with M1, M2, M3, M4 chips (most Macs from 2021 on). Disk image: drag to Applications.</div>
+        <a class="get" data-asset="mac-arm" href="https://github.com/shubhams-work/IEEE-conference-/releases/latest">Download .dmg</a>
+        <div class="file" data-asset="mac-arm"></div>
+      </div>
+      <div class="card dl" data-card="mac-intel">
+        <h3><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.6c0-2.4 2-3.5 2-3.6-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.2-2.8.8-3.5.8-.7 0-1.8-.8-3-.8-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.2.8 1.1 1.7 2.3 2.9 2.3 1.2-.1 1.6-.7 3-.7s1.8.7 3 .7c1.3 0 2.1-1.1 2.8-2.2.9-1.3 1.3-2.5 1.3-2.6 0 0-2.5-1-2.5-3.6zM14.2 5.6c.6-.8 1.1-1.8 1-2.9-.9 0-2.1.6-2.7 1.4-.6.7-1.1 1.8-1 2.8 1 .1 2.1-.5 2.7-1.3z"/></svg>macOS · Intel</h3>
+        <div class="what">Older Macs with an Intel processor. Not sure? Apple menu → About This Mac shows "Chip" (Apple) or "Processor" (Intel).</div>
+        <a class="get" data-asset="mac-intel" href="https://github.com/shubhams-work/IEEE-conference-/releases/latest">Download .dmg</a>
+        <div class="file" data-asset="mac-intel"></div>
+      </div>
+      <div class="card dl" data-card="linux">
+        <h3><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-2.2 0-3.6 1.9-3.6 4.6 0 1.4.2 2.4-.6 3.6C6.6 12 5 14 5 16.6c0 .8.2 1.3.5 1.7-.8.4-1.7 1-1.4 1.9.3 1 2 .6 3.1 1.2 1.2.6 2.3.9 3.1.2.5-.4.8-.5 1.7-.5s1.2.1 1.7.5c.8.7 1.9.4 3.1-.2 1.1-.6 2.8-.2 3.1-1.2.3-.9-.6-1.5-1.4-1.9.3-.4.5-.9.5-1.7 0-2.6-1.6-4.6-2.8-6.4-.8-1.2-.6-2.2-.6-3.6C15.6 3.9 14.2 2 12 2z"/></svg>Linux</h3>
+        <div class="what"><b>.deb</b> for Ubuntu 22.04+, Debian, Mint, Pop!_OS. <b>.tar.gz</b> for any other 64-bit Linux: unpack and run <code>./install.sh</code>.</div>
+        <a class="get" data-asset="deb" href="https://github.com/shubhams-work/IEEE-conference-/releases/latest">Download .deb</a>
+        <div class="file" data-asset="deb"></div>
+        <a class="get alt" data-asset="tgz" href="https://github.com/shubhams-work/IEEE-conference-/releases/latest">Download .tar.gz</a>
+        <div class="file" data-asset="tgz"></div>
+      </div>
+    </div>
+    <p class="note" id="dl-note">All files are on the <a id="rel-link" href="https://github.com/shubhams-work/IEEE-conference-/releases/latest">GitHub releases page</a>. Every installer is built and tested automatically on real Windows, macOS (Apple silicon and Intel) and Linux machines before it is published.</p>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <h2>Install</h2>
+    <p class="sub">Takes under a minute. The app is free and not signed by Microsoft or Apple, so your computer asks once whether you trust it.</p>
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="t-win">Windows</button>
+      <button role="tab" aria-selected="false" data-tab="t-mac">macOS</button>
+      <button role="tab" aria-selected="false" data-tab="t-linux">Linux</button>
+    </div>
+    <div class="card">
+      <div class="panel on" id="t-win" role="tabpanel">
+        <ol>
+          <li>Double-click <code>IEEE-Paper-Checker-Setup-….exe</code>.</li>
+          <li>If a blue "Windows protected your PC" box appears, click <b>More info → Run anyway</b>.</li>
+          <li>Click <b>Next → Install → Finish</b>. No administrator rights are needed.</li>
+          <li>Open <b>IEEE Paper Format Checker</b> from the Start Menu, or right-click any PDF → <b>Show more options → Check IEEE format</b>.</li>
+        </ol>
+        <p class="note">Uninstall: Settings → Apps → Installed apps → IEEE Paper Format Checker → Uninstall.</p>
+      </div>
+      <div class="panel" id="t-mac" role="tabpanel">
+        <ol>
+          <li>Open the downloaded <code>.dmg</code> and drag <b>IEEE-Paper-Checker</b> onto <b>Applications</b>.</li>
+          <li>Open the app once from Applications. macOS will block it because it is not from the App Store.</li>
+          <li>Go to <b>System Settings → Privacy &amp; Security</b>, scroll down and click <b>Open Anyway</b>. (macOS 14 and older: right-click the app → Open → Open.)</li>
+          <li>From then on it opens normally. Tip: right-click a PDF → Open With → IEEE-Paper-Checker.</li>
+        </ol>
+        <p class="note">Alternative in Terminal: <code>xattr -dr com.apple.quarantine /Applications/IEEE-Paper-Checker.app</code>. Uninstall: drag the app to the Bin.</p>
+      </div>
+      <div class="panel" id="t-linux" role="tabpanel">
+        <ol>
+          <li><b>Ubuntu / Debian / Mint:</b> double-click the <code>.deb</code> file, or run <code>sudo apt install ./ieee-paper-checker_…_amd64.deb</code>.</li>
+          <li><b>Other distributions:</b> unpack the <code>.tar.gz</code> and run <code>./install.sh</code> (installs for your user only).</li>
+          <li>Open <b>IEEE Paper Format Checker</b> from the applications menu, or run <code>ieee-paper-checker</code>.</li>
+        </ol>
+        <p class="note">Command line: <code>ieee-check paper.pdf</code>. Uninstall: <code>sudo apt remove ieee-paper-checker</code> or <code>./install.sh --uninstall</code>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <h2>What it checks</h2>
+    <p class="sub">Pick your PDF, press <b>Check paper</b>, and get a list of problems, a full report and an annotated copy of your paper.</p>
+    <div class="grid three">
+      <div class="card feat"><div class="ico">📄</div><h3>Page setup &amp; margins</h3><p>A4 on every page, required margins on every page, two columns with the right gap, and the page limit.</p></div>
+      <div class="card feat"><div class="ico">🔗</div><h3>Citations</h3><p>Every reference in the list is cited in the text, every [n] in the text exists, and numbering follows IEEE order.</p></div>
+      <div class="card feat"><div class="ico">🧭</div><h3>In-text references</h3><p>Every figure and table is mentioned, with no references to a Fig. 7, Eq. (9) or Section VII that doesn't exist.</p></div>
+      <div class="card feat"><div class="ico">✅</div><h3>IEEE PDF eXpress</h3><p>Looks for the "Certified by IEEE PDFeXpress" stamp, checks the file wasn't changed afterwards, and applies all IEEE Xplore file rules.</p></div>
+      <div class="card feat"><div class="ico">📊</div><h3>Tables &amp; images</h3><p>Finds tables pasted as pictures and images below 300 / 600 dpi, including enlarged or blurry ones.</p></div>
+      <div class="card feat"><div class="ico">🔤</div><h3>Fonts &amp; style</h3><p>Times 10 pt body, all fonts embedded, no bitmap fonts, plus the IEEE title, abstract, heading and caption style.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="screens">
+  <div class="wrap">
+    <h2>See exactly where the problems are</h2>
+    <p class="sub">The annotated PDF highlights each problem on the page and explains it in a notes panel beside it.</p>
+    <div class="shots">
+      <figure class="shot"><img src="assets/screenshot-annotated.png" alt="Annotated paper page: problems highlighted on the page and explained in a notes panel on the right" loading="lazy"><figcaption>Annotated PDF: each problem highlighted and explained</figcaption></figure>
+      <div style="display:grid; gap:22px">
+        <figure class="shot"><img src="assets/screenshot-app.png" alt="App window listing errors, warnings and passed checks for a paper" loading="lazy"><figcaption>The app window after checking a paper</figcaption></figure>
+        <figure class="shot"><img src="assets/screenshot-summary.png" alt="Summary page with verdict and numbered list of problems" loading="lazy"><figcaption>Summary page with a numbered list of every problem</figcaption></figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="rules">
+  <div class="wrap">
+    <h2>Default conference rules</h2>
+    <p class="sub">Organisers can change these in one file (<code>ieee_checker/spec.py</code>) and rebuild.</p>
+    <div class="tw">
+    <table class="rules">
+      <tr><th>Rule</th><th>Requirement</th></tr>
+      <tr><td>Paper size</td><td>A4 (210 × 297 mm) on every page</td></tr>
+      <tr><td>Margins</td><td>Top and bottom 0.75 in (19 mm), left and right 0.625 in (16 mm)</td></tr>
+      <tr><td>Columns</td><td>Two columns, 4.22 mm apart</td></tr>
+      <tr><td>Length</td><td>4-6 pages (editable in the app)</td></tr>
+      <tr><td>Citations</td><td>Every reference cited; every citation in the reference list</td></tr>
+      <tr><td>PDF</td><td>Certified by IEEE PDF eXpress and not modified afterwards</td></tr>
+    </table>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>IEEE Paper Format Checker · free · works offline</span>
+    <span><a href="https://github.com/shubhams-work/IEEE-conference-">Source code</a> · <a href="https://github.com/shubhams-work/IEEE-conference-/issues">Report a problem</a></span>
+  </div>
+  <div class="wrap" style="margin-top:8px"><span>Not affiliated with or endorsed by IEEE. Automatic checks complement, and don't replace, your conference's author instructions.</span></div>
+</footer>
+
+<script>
+(function () {
+  var REPO = "shubhams-work/IEEE-conference-";
+  var RELEASES = "https://github.com/" + REPO + "/releases/latest";
+  var PLAT = {
+    "win":       { re: /setup.*\.exe$/i,           label: "Download for Windows" },
+    "mac-arm":   { re: /macos-arm64\.dmg$/i,        label: "Download for Mac (Apple silicon)" },
+    "mac-intel": { re: /macos-x86_64\.dmg$/i,       label: "Download for Mac (Intel)" },
+    "deb":       { re: /_amd64\.deb$/i,             label: "Download for Linux (.deb)" },
+    "tgz":       { re: /linux-x64\.tar\.gz$/i,      label: "Download for Linux (.tar.gz)" }
+  };
+
+  function detect() {
+    var ua = (navigator.userAgent || "").toLowerCase();
+    var pf = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "").toLowerCase();
+    if (/android|iphone|ipad|ipod/.test(ua)) return null;
+    if (pf.indexOf("win") >= 0 || ua.indexOf("windows") >= 0) return "win";
+    if (pf.indexOf("mac") >= 0 || ua.indexOf("mac os") >= 0) {
+      try {   // Apple silicon Macs report an Apple GPU through WebGL
+        var c = document.createElement("canvas"), gl = c.getContext("webgl");
+        var dbg = gl && gl.getExtension("WEBGL_debug_renderer_info");
+        var r = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : "";
+        if (/intel/i.test(r)) return "mac-intel";
+      } catch (e) {}
+      return "mac-arm";
+    }
+    if (pf.indexOf("linux") >= 0 || ua.indexOf("linux") >= 0) return "deb";
+    return null;
+  }
+
+  var mine = detect();
+  var mainBtn = document.getElementById("main-btn"), mainLabel = document.getElementById("main-label"),
+      mainMeta = document.getElementById("main-meta");
+  if (mine) {
+    mainLabel.textContent = PLAT[mine].label;
+    var card = document.querySelector('.dl[data-card="' + (mine === "deb" ? "linux" : mine) + '"]');
+    if (card) {
+      card.classList.add("mine");
+      var b = document.createElement("span"); b.className = "badge"; b.textContent = "Your system";
+      card.querySelector("h3").appendChild(b);
+    }
+    var tab = mine === "win" ? "t-win" : (mine.indexOf("mac") === 0 ? "t-mac" : "t-linux");
+    selectTab(tab);
+  } else {
+    mainLabel.textContent = "Download";
+    mainBtn.href = "#download";
+  }
+
+  function mb(n) { return (n / 1048576).toFixed(0) + " MB"; }
+
+  fetch("https://api.github.com/repos/" + REPO + "/releases/latest", { headers: { "Accept": "application/vnd.github+json" } })
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function (rel) {
+      var ver = (rel.tag_name || "").replace(/^v/, "");
+      var date = rel.published_at ? new Date(rel.published_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "";
+      document.getElementById("dl-sub").textContent = "Version " + ver + (date ? " · released " + date : "") +
+        ". Each installer includes everything it needs, so you don't need to install Python or anything else.";
+      Object.keys(PLAT).forEach(function (id) {
+        var asset = (rel.assets || []).filter(function (a) { return PLAT[id].re.test(a.name); })[0];
+        var btn = document.querySelector('a.get[data-asset="' + id + '"]');
+        var file = document.querySelector('.file[data-asset="' + id + '"]');
+        if (!asset || !btn) return;
+        btn.href = asset.browser_download_url;
+        if (file) file.textContent = asset.name + " · " + mb(asset.size);
+        if (id === mine) {
+          mainBtn.href = asset.browser_download_url;
+          mainMeta.textContent = "Version " + ver + " · " + mb(asset.size) + " · Other systems below";
+        }
+      });
+    })
+    .catch(function () {
+      document.getElementById("dl-note").insertAdjacentHTML("afterbegin",
+        "Couldn't load the file list just now, so the buttons open the releases page. ");
+      if (mine) mainBtn.href = RELEASES;
+    });
+
+  function selectTab(id) {
+    document.querySelectorAll(".tabs button").forEach(function (b) {
+      b.setAttribute("aria-selected", b.getAttribute("data-tab") === id ? "true" : "false");
+    });
+    document.querySelectorAll(".panel").forEach(function (p) { p.classList.toggle("on", p.id === id); });
+  }
+  document.querySelectorAll(".tabs button").forEach(function (b) {
+    b.addEventListener("click", function () { selectTab(b.getAttribute("data-tab")); });
+  });
+})();
+</script>
+</body>
+</html>

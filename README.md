@@ -1,131 +1,189 @@
-# IEEE Paper Format Checker (offline)
+<div align="center">
 
-Checks an IEEE **conference** paper (PDF) for formatting problems, works fully
-offline, and runs on **Windows, macOS and Linux**.
+<img src="docs/assets/icon.png" alt="IEEE Paper Format Checker logo" width="120">
 
-Pick a PDF, press **Check paper**, and you get:
+# IEEE Paper Format Checker
 
-* a list of problems in the window (red = error, orange = warning),
-* a full **HTML report** with pictures of every problem region,
-* an **annotated copy of the PDF** with coloured boxes and notes on each problem
-  and a dashed blue outline of the IEEE text area.
+**Check your IEEE conference paper before you submit it.**<br>
+A free desktop app that finds formatting problems in your PDF in seconds and shows exactly where they are.<br>
+It works offline, so your paper never leaves your computer.
 
-Your paper never leaves the computer.
+[![Download](https://img.shields.io/badge/Download-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-0a66d8?style=for-the-badge)](https://shubhams-work.github.io/IEEE-conference-/)
 
-## Installing
+[![Latest release](https://img.shields.io/github/v/release/shubhams-work/IEEE-conference-?label=latest%20version)](https://github.com/shubhams-work/IEEE-conference-/releases/latest)
+[![Build and test](https://github.com/shubhams-work/IEEE-conference-/actions/workflows/build.yml/badge.svg)](https://github.com/shubhams-work/IEEE-conference-/actions/workflows/build.yml)
+![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-555)
+![Offline](https://img.shields.io/badge/works-offline-1e7f3a)
 
-### Option A: installer (recommended, no Python needed)
+[**Download**](https://shubhams-work.github.io/IEEE-conference-/) ·
+[What it checks](#what-it-checks) ·
+[How to use](#how-to-use) ·
+[For conference organisers](#for-conference-organisers) ·
+[Build from source](#build-from-source)
 
-Each installer contains everything, including its own copy of Python, so the
-computer needs nothing else.
+<img src="docs/assets/screenshot-annotated.png" alt="Annotated paper: each problem highlighted on the page and explained in a notes panel" width="820">
 
-| System  | Installer | How to install |
-|---------|-----------|----------------|
-| Windows 10/11 | `IEEE-Paper-Checker-Setup-1.3.2.exe` | Double-click and follow the wizard. No admin rights needed (you can choose "all users"). Adds Start Menu and desktop shortcuts, a **"Check IEEE format"** entry when you right-click a PDF, and an uninstaller in *Settings → Apps*. If SmartScreen appears: *More info → Run anyway*. |
-| macOS   | `IEEE-Paper-Checker-1.3.2-macOS-arm64.dmg` (Apple silicon M1–M4) or `...-x86_64.dmg` (Intel) | Open the .dmg and drag the app onto *Applications*. The app is unsigned, so the first start is blocked: open it once, then go to *System Settings → Privacy & Security* and click **Open Anyway** (on macOS 14 and older you can instead right-click the app → *Open*). Alternative in Terminal: `xattr -dr com.apple.quarantine /Applications/IEEE-Paper-Checker.app`. Uninstall: drag it to the Bin. |
-| Ubuntu / Debian / Mint | `ieee-paper-checker_1.3.2_amd64.deb` | Double-click (Software Center) or `sudo apt install ./ieee-paper-checker_1.3.2_amd64.deb`. Uninstall: `sudo apt remove ieee-paper-checker`. |
-| Other Linux | `IEEE-Paper-Checker-1.3.2-linux-x64.tar.gz` | Unpack, then run `./install.sh` (no sudo). Uninstall: `./install.sh --uninstall`. |
+</div>
 
-After installing, open **IEEE Paper Format Checker** from the Start Menu,
-Launchpad or applications menu, or right-click a PDF and choose it.
+---
 
-#### Making the installers
+## Download
 
-* **Automatically on GitHub (all systems at once).** Push this folder to a GitHub
-  repository, open *Actions → Build installers → Run workflow*, and download the
-  installers from the finished run. Pushing a tag such as `v1.3.2` also publishes
-  them as a Release.
-* **On your own computer.** A computer can only build its own system's installer:
-  * Windows: install Python and [Inno Setup](https://jrsoftware.org/isdl.php) (version 6 or 7), then run `build_windows.bat`
-  * macOS: `./build_mac.sh`
-  * Linux: `sudo apt install python3-venv python3-tk binutils`, then `./build_linux.sh`
+Get the installer for your system from the **[download page](https://shubhams-work.github.io/IEEE-conference-/)** or the **[latest release](https://github.com/shubhams-work/IEEE-conference-/releases/latest)**. Each installer includes everything it needs, so you don't need to install Python or anything else.
 
-  The installers are written to `dist/`.
+| System | File | Install |
+|---|---|---|
+| **Windows 10 / 11** | `IEEE-Paper-Checker-Setup-<version>.exe` | Double-click → **Next → Install**. No admin rights needed. If *"Windows protected your PC"* appears: **More info → Run anyway**. |
+| **macOS · Apple silicon** (M1–M4) | `IEEE-Paper-Checker-<version>-macOS-arm64.dmg` | Open, drag the app to **Applications**. First start: open it once, then **System Settings → Privacy & Security → Open Anyway**. |
+| **macOS · Intel** | `IEEE-Paper-Checker-<version>-macOS-x86_64.dmg` | Same as above. Not sure which Mac you have? Apple menu → *About This Mac*. |
+| **Ubuntu / Debian / Mint** | `ieee-paper-checker_<version>_amd64.deb` | Double-click, or `sudo apt install ./ieee-paper-checker_<version>_amd64.deb` |
+| **Other Linux** | `IEEE-Paper-Checker-<version>-linux-x64.tar.gz` | Unpack and run `./install.sh` (no sudo). |
 
-### Option B: run from source (needs Python 3.9+)
+> The app is free and not signed by Microsoft or Apple, so your computer asks once whether you trust it. Every installer is built and tested automatically on real Windows, macOS (Apple silicon and Intel) and Linux machines before it is published.
 
-Double-click `run_windows.bat` (Windows) or `run_mac.command` (macOS), or run
-`./run_linux.sh` (Linux). The first run installs three libraries (PyMuPDF,
-NumPy, Pillow) and needs internet once. After that it works offline.
-
-On Linux, Tkinter must be installed first: `sudo apt install python3-tk python3-venv`.
-On macOS, use the Python installer from python.org, which includes Tkinter.
-
-## Command line
-
-```
-ieee-check paper.pdf                          # Windows: ieee-check.exe, or: python ieee_format_checker.py paper.pdf
-ieee-check paper.pdf --min-pages 4 --max-pages 6
-ieee-check paper.pdf --paper letter           # override the required paper size
-ieee-check *.pdf --out reports/ --json        # batch mode, JSON output
-```
-
-The exit code is 1 if any error is found, so the command can be used in scripts and CI.
-
-## Conference rules checked (default profile)
-
-| Rule | Requirement | Severity if broken |
-|------|-------------|--------------------|
-| **Paper size** | A4 (210 x 297 mm) on **every page** | Error |
-| **Margins** | Top and bottom 0.75 in (19 mm); left and right 0.625 in (16 mm), on every page | Error (> 3 mm) / Warning |
-| **Columns** | Two columns, 4.22 mm between them (4.0-5.8 mm accepted) | Error / Warning |
-| **Page count** | 4-6 pages (editable in the app) | Error above max, Warning below min |
-| **Citations** | Every reference in the list is cited in the text as [n]; every [n] exists in the list; no duplicate numbers; numbered in order of first citation; no author-year citations | Error (order: Warning) |
-| **In-text references** | Every figure and table is referred to in the text; no references to figures, tables, equations or sections that do not exist (e.g. "Fig. 7" when there are 5 figures) | Error |
-| **IEEE PDF eXpress certification** | The PDF carries the stamp *"Certified by IEEE PDFeXpress at MM/DD/YYYY HH:MM:SS AM/PM"* in its properties (written by IEEE PDF eXpress into every approved paper), and it was **not changed after certification** (creation date = last-modified date, as IEEE asks organisers to verify) | Error |
-| **IEEE Xplore file rules** (what PDF eXpress checks) | All fonts embedded and subset, no Type 3 fonts, no password/security, no bookmarks, no hyperlinks, no attachments, not a portfolio, no JavaScript, no form fields, no comments, PDF version 1.3-1.7 | Error (links/subsetting: Warning) |
-
-**About the PDF eXpress check:** every paper approved by IEEE PDF eXpress
-(PDF Check or Conversion) contains the text *"Certified by IEEE PDFeXpress at
-<date> <time>"* in its document properties (you can see it in Acrobat Reader
-under File > Properties). If the stamp is missing, the paper did not go through
-eXpress. If the file was edited, re-saved, compressed or merged after approval,
-its last-modified date no longer matches its creation date and the checker
-reports it. Submit exactly the file eXpress e-mailed back.
-
-## Other checks
+## What it checks
 
 | Area | Checks |
-|------|--------|
-| **Tables** | Every `TABLE I, II, ...` is a **real drawn table (text + rules), not a pasted image**. Pictures that *look like* a table or a text screenshot are flagged even without a caption. Table captions use upper-case Roman numerals and sit above the table. |
-| **Image quality** | Resolution at printed size: photos ≥ 300 dpi, line art/diagrams ≥ 600 dpi (IEEE graphics guidelines). **Upscaled or blurry images**. Diagrams saved as JPEG. Heavy JPEG compression. Images crossing the column gap or overlapping text. The report lists every image with its dpi. |
-| **Header/footer** | No page numbers, headers, footers or arXiv stamps. The IEEE copyright line on page 1 is allowed. |
-| **Layout** | Column width, last-page column balance, single-column pages. |
-| **Fonts** | Times / Times New Roman body text, 10 pt body, 24 pt title, 9 pt abstract, 8 pt captions and references. |
-| **Front matter** | Title size and case, `Abstract—` present and 150–250 words with no citations, Index Terms / Keywords present. |
-| **Headings** | Roman-numeral section numbering (I. INTRODUCTION) in sequence; "Acknowledgment" spelling. |
-| **Figures** | `Fig. N.` caption style, sequential numbering, caption below the figure. |
-| **Leftovers** | Template placeholder text ("Paper Title (use style: paper title)", "dept. name of organization", ...), unresolved LaTeX `??` / `[?]`, Word "Error! Reference source not found". |
+|---|---|
+| 📄 **Page setup** | A4 (210 × 297 mm) on **every page**, page limit, blank pages |
+| 📐 **Margins & columns** | Top/bottom 19 mm, left/right 16 mm on every page; two columns with a 4.22 mm gap; balanced last page |
+| 🔗 **Citations** | Every reference is cited as [n]; every [n] exists in the list; no duplicates; numbered in order of first citation; no author-year style |
+| 🧭 **In-text references** | Every figure and table is mentioned in the text; no mentions of a *Fig. 7*, *Eq. (9)* or *Section VII* that doesn't exist |
+| ✅ **IEEE PDF eXpress** | The *"Certified by IEEE PDFeXpress at …"* stamp is present and the PDF wasn't changed after certification |
+| 🗂️ **IEEE Xplore file rules** | Fonts embedded and subset, no Type 3 fonts, no security, bookmarks, links, attachments, JavaScript, forms or comments; PDF 1.3–1.7 |
+| 📊 **Tables** | Tables must be real tables, not **pasted pictures**; screenshots of tables or text are detected |
+| 🖼️ **Image quality** | Photos ≥ 300 dpi, diagrams ≥ 600 dpi at printed size; **upscaled or blurry** images; diagrams saved as JPEG |
+| 🔤 **Fonts & style** | Times 10 pt body, 24 pt title, 9 pt abstract, 8 pt captions and references; Roman-numeral headings; `Fig. N.` and `TABLE I` captions |
+| 🧹 **Leftovers** | Template placeholder text, unresolved `??` / `[?]`, Word *"Error! Reference source not found"*, page numbers, headers, arXiv stamps |
 
-The **annotated PDF** starts with summary pages (verdict, numbered list of every
-problem with how to fix it, citation table, PDF eXpress checklist, measured
-margins, images, tables). Every paper page then gets a **notes panel on the
-right**: each problem is highlighted or framed at its exact location (the
-uncited reference, the wrong citation [8], the "Fig. 5" that does not exist, the
-strip of text inside the margin, ...) and connected by a line to its numbered
-note. The panel also shows the page's required vs measured margins, the dpi of
-every image and whether every table is real. Viewer page numbers still match
-the paper's page numbers.
+## How to use
 
-The HTML report contains a **citation table** (each reference, how often and on
-which pages it is cited), an **in-text reference table** for figures, tables
-and equations, and an **IEEE PDF eXpress / Xplore checklist**.
+1. Open **IEEE Paper Format Checker**. On Windows you can also right-click a PDF and choose **Check IEEE format**.
+2. Choose your PDF and press **Check paper**.
+3. You get three results, saved next to your PDF:
 
-## Adjusting for another conference
+| Result | What it shows |
+|---|---|
+| **The app window** | Every problem: red = error (must fix), orange = warning, green = passed. Double-click a row for details. |
+| **Annotated PDF** (`…_IEEE_annotated.pdf`) | Summary pages with a numbered list of problems and how to fix them. Each page then gets a **notes panel**: every problem is highlighted at its exact spot and linked to its note. |
+| **HTML report** (`…_IEEE_report.html`) | Full report with pictures, a citation table, an in-text reference table, the PDF eXpress checklist, measured margins and every image's dpi. |
 
-The rules are in the **CONFERENCE PROFILE** block at the top of
-`ieee_checker/spec.py`: required paper size, page range, margins, column gap,
-whether uncited references are errors, and the PDF eXpress check. Edit the
-values there and rebuild the installer. Paper size and page range can also be
-changed in the app window for a single check.
+<p align="center">
+  <img src="docs/assets/screenshot-app.png" alt="App window listing errors, warnings and passed checks" width="720">
+</p>
 
-Note: the standard IEEEtran LaTeX class with `a4paper` uses about 14.3 mm side
-margins, which is narrower than 16 mm. To meet the default profile, add
-`\usepackage[a4paper,top=0.75in,bottom=0.75in,left=0.625in,right=0.625in,columnsep=4.22mm]{geometry}`.
+### Command line
+
+```bash
+ieee-check paper.pdf                            # Windows: ieee-check.exe
+ieee-check paper.pdf --min-pages 4 --max-pages 6
+ieee-check paper.pdf --paper letter             # require US Letter instead of A4
+ieee-check *.pdf --out reports/ --json          # check many papers, JSON output
+```
+
+The exit code is `1` when errors are found, so it can be used in scripts.
+
+### About the IEEE PDF eXpress check
+
+Every paper approved by [IEEE PDF eXpress](https://ieee-pdf-express.org) contains the text *"Certified by IEEE PDFeXpress at MM/DD/YYYY HH:MM:SS AM/PM"* in its document properties (Acrobat Reader: *File → Properties*). If the stamp is missing, the paper didn't go through eXpress. If the approved file was edited, re-saved, compressed or merged afterwards, its last-modified date no longer matches its creation date, and the checker reports that. **Submit exactly the file eXpress e-mailed back.**
+
+### LaTeX users
+
+The standard IEEEtran class with `a4paper` uses about 14.3 mm side margins, narrower than the 16 mm required by the default rules. Add:
+
+```latex
+\usepackage[a4paper,top=0.75in,bottom=0.75in,left=0.625in,right=0.625in,columnsep=4.22mm]{geometry}
+```
+
+Remove `hyperref`, or use `\usepackage[draft]{hyperref}`, because IEEE Xplore PDFs must not contain bookmarks or links.
+
+## For conference organisers
+
+All rules are in the **CONFERENCE PROFILE** block at the top of [`ieee_checker/spec.py`](ieee_checker/spec.py):
+
+```python
+REQUIRED_PAPER = "a4"           # "a4", "letter" or "auto"
+MIN_PAGES = 4
+MAX_PAGES = 6
+CONF_MARGINS = {"top": 0.75 * INCH, "bottom": 0.75 * INCH, "left": 0.625 * INCH, "right": 0.625 * INCH}
+COLUMN_GAP = 4.22 * MM
+REQUIRE_PDF_EXPRESS = True
+UNCITED_REFERENCE_IS_ERROR = True
+```
+
+Change the values, push to GitHub, and new installers for every platform are built, tested and published automatically (see below). Authors can also change the paper size and page range in the app for a single check.
+
+| Rule | Default requirement | If broken |
+|---|---|---|
+| Paper size | A4 on every page | Error |
+| Margins | 19 mm top/bottom, 16 mm left/right | Error (> 3 mm) / Warning |
+| Columns | Two, 4.22 mm apart (4.0–5.8 mm accepted) | Error / Warning |
+| Length | 4–6 pages | Error above max, Warning below min |
+| Citations | All references cited, all citations exist | Error |
+| In-text references | All figures/tables mentioned, none missing | Error |
+| PDF eXpress | Certified and unmodified | Error |
+| Xplore file rules | Fonts, security, bookmarks, version … | Error (links / subsetting: Warning) |
+
+## Build from source
+
+<details>
+<summary><b>Automatic builds on GitHub (all platforms)</b></summary>
+
+[`.github/workflows/build.yml`](.github/workflows/build.yml) runs on every push to `main` and on version tags. For each platform it:
+
+1. builds the installer: Windows `Setup.exe` (Inno Setup), macOS `.dmg` for Apple silicon and Intel, Linux `.deb` and `.tar.gz`
+2. **installs it** on a clean machine, like a user would
+3. runs [`tests/ci_check.py`](tests/ci_check.py): the installed app must find every problem planted in `tests/samples/sample_errors.pdf`, pass the clean sample, and write the report and annotated PDF
+4. opens the app window with a paper and checks that it runs the check by itself
+
+Pushing a tag such as `v1.4.0` (after updating `ieee_checker/__init__.py`) publishes the tested installers as a GitHub Release. The [download page](https://shubhams-work.github.io/IEEE-conference-/) always offers the latest release.
+
+</details>
+
+<details>
+<summary><b>Build an installer on your own computer</b></summary>
+
+A computer can only build its own system's installer:
+
+| System | Requirements | Command |
+|---|---|---|
+| Windows | Python 3.9+, [Inno Setup](https://jrsoftware.org/isdl.php) 6 or 7 | `build_windows.bat` |
+| macOS | Python 3.9+ from python.org | `./build_mac.sh` |
+| Linux | `sudo apt install python3-venv python3-tk binutils` | `./build_linux.sh` |
+
+The installers are written to `dist/`.
+
+</details>
+
+<details>
+<summary><b>Run from source</b></summary>
+
+With Python 3.9+ installed, double-click `run_windows.bat` or `run_mac.command`, or run `./run_linux.sh`. The first run installs PyMuPDF, NumPy and Pillow (internet needed once); after that it works offline.
+
+</details>
+
+<details>
+<summary><b>Project structure</b></summary>
+
+```
+ieee_checker/
+  analyzer.py      all checks (layout, fonts, citations, references, eXpress, Xplore rules)
+  imagecheck.py    image resolution, upscaling/blur, table-screenshot detection
+  report.py        HTML report
+  annotate.py      annotated PDF (summary pages + notes panel)
+  app.py           desktop window and command line
+  spec.py          conference rules (edit this)
+installer/         icons, PyInstaller spec, Inno Setup script, Linux packaging
+tests/             end-to-end test and sample papers
+docs/              download page (GitHub Pages)
+```
+
+</details>
 
 ## Limits
 
-These are automatic checks based on what can be measured in the PDF. They
-complement, and do not replace, the conference's own author instructions and
-IEEE PDF eXpress. Table and figure detection uses heuristics, so if something
-looks wrong, check the highlighted region in the annotated PDF.
+These are automatic checks of what can be measured in the PDF. They complement, and don't replace, your conference's author instructions and IEEE PDF eXpress. Table and image detection uses heuristics, so if a result looks wrong, look at the highlighted spot in the annotated PDF.
+
+<div align="center">
+<sub>Not affiliated with or endorsed by IEEE.</sub>
+</div>
