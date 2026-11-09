@@ -42,6 +42,19 @@ EXPECTED_REVIEW = {               # double-blind review stage: substring in an e
     "code repository link": "code repository",
 }
 
+EXPECTED_TEMPLATE = {             # IEEE template rules: substring in any finding
+    "1.6x line spacing": "not single-spaced",
+    "math / footnote in title": "title contains",
+    "math in abstract": "abstract contains math",
+    "coloured body text": "coloured",
+    "'Figure 1' instead of 'Fig. 1'": '"figure" is written out',
+    "'Ref. [2]'": "ref. [2]",
+    "'.25' without leading zero": "leading zero",
+    "text smaller than 6 pt": "smaller than 6 pt",
+    "reference without a year": "have no year",
+    "'et al.' in the reference list": "et al.",
+}
+
 
 def run(exe, pdf, out, stage="camera-ready"):
     cmd = list(exe) + [pdf, "--json", "--out", out, "--stage", stage]
@@ -132,6 +145,16 @@ def main():
     print(f"  [{'OK ' if ok else 'FAIL'}] camera-ready stage requires author names")
     if not ok:
         failures.append("camera-ready stage did not require author names")
+
+    # IEEE template rules
+    code, data = run(exe, os.path.join(SAMPLES, "template_rules_broken.pdf"), out)
+    msgs = [f["message"].lower() for f in data["findings"]]
+    print("template_rules_broken.pdf:")
+    for label, needle in EXPECTED_TEMPLATE.items():
+        ok = any(needle.lower() in m for m in msgs)
+        print(f"  [{'OK ' if ok else 'FAIL'}] detects {label}")
+        if not ok:
+            failures.append(f"template rule not detected: {label}")
 
     if failures:
         print("\nFAILED:\n  - " + "\n  - ".join(failures))

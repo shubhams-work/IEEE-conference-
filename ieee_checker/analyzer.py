@@ -222,6 +222,7 @@ class Analyzer:
             ("Checking references & citations", self.check_references),
             ("Checking leftover template text", self.check_leftovers),
             ("Checking author details / anonymity", self.check_authors),
+            ("Checking IEEE template rules", self.check_template_rules),
             ("Checking PDF eXpress / IEEE Xplore rules", self.check_xplore),
             ("Checking misc. items", self.check_misc),
         ]
@@ -241,6 +242,7 @@ class Analyzer:
                  & ~pymupdf.TEXT_PRESERVE_LIGATURES)
         self.lines: list[Line] = []
         self.spans: list[list] = []        # per page: (rect, text, size, font)
+        self.span_info = []                # (page, rect, text, size, font, color, flags)
         self.page_rects = []
         self.drawings = []                 # per page: list of Rect
         self.page_images = []              # per page: get_image_info list
@@ -265,6 +267,9 @@ class Analyzer:
                         fonts[clean_font(s["font"])] += n
                         if s["flags"] & 16 or "bold" in s["font"].lower():
                             bold_chars += n
+                        self.span_info.append((pno, pymupdf.Rect(s["bbox"]), s["text"], s["size"],
+                                               clean_font(s["font"]), s.get("color", 0),
+                                               s.get("flags", 0)))
                         pspans.append((pymupdf.Rect(s["bbox"]), s["text"], s["size"],
                                        clean_font(s["font"])))
                     total = sum(weights.values())
@@ -580,6 +585,7 @@ class Analyzer:
                     margin_lines.add(key)
                 elif pno == 0 and outside_bot and re.search(
                         r"(©|\(c\)|copyright|IEEE|\$\d|97[89]-|DOI|ISBN|\d{4}\s*IEEE)", t, re.I):
+                    self.copyright_line = (pno + 1, rect_t(ln.bbox), t)
                     self.add(INFO, "Margins", "Copyright / ISBN notice found at the bottom of "
                              "page 1 (allowed when inserted as instructed by the conference).",
                              page=1, detail=t[:120])
@@ -1309,10 +1315,19 @@ class Analyzer:
         if ln.page != ref.page:
             return ln.page > ref.page
         cx = self.page_rects[ln.page].width / 2
-        col = lambda l: 0 if l.bbox.x1 <= cx + 3 else 1  # noqa: E731
-        if ln.page in getattr(self, "two_col_pages", set()):
-            if col(ln) != col(ref):
-                return col(ln) > col(ref)
+
+        def col(l):
+            if l.bbox.x1 <= cx + 3:
+                return 0
+            if l.bbox.x0 >= cx - 3:
+                return 1
+            return None                                  # spans both columns
+        # a two-column paper is read column by column on EVERY page, including a short
+        # last page that holds only references (too little body text to be detected)
+        two_col = ln.page in getattr(self, "two_col_pages", set()) or \
+            len(getattr(self, "two_col_pages", set())) > 0
+        if two_col and col(ln) is not None and col(ref) is not None and col(ln) != col(ref):
+            return col(ln) > col(ref)
         return ln.bbox.y0 >= ref.bbox.y0 - 1
 
     def check_references(self):
@@ -1342,7 +1357,7 @@ class Analyzer:
                 nums.append(current)
                 entries.setdefault(current, {"text": m.group(2), "page": ln.page + 1,
                                              "rect": rect_t(ln.bbox)})
-            elif current is not None and len(entries[current]["text"]) < 300:
+            elif current is not None and len(entries[current]["text"]) < 900:
                 entries[current]["text"] += " " + ln.text
         if not nums:
             self.add(ERROR, "Citations", "References are not numbered [1], [2], ... "
@@ -1437,6 +1452,7 @@ class Analyzer:
                 "status": ("MISSING FROM LIST" if n in missing else
                            "NOT CITED" if n not in cites else "cited"),
                 "text": entries.get(n, {}).get("text", "")[:110],
+                "full": entries.get(n, {}).get("text", ""),
                 "page": entries.get(n, {}).get("page"), "rect": entries.get(n, {}).get("rect")})
 
     # --------------------------------------------------------------- leftovers
@@ -1464,6 +1480,295 @@ class Analyzer:
             self.add(PASS, "Template text", "No leftover template text or unresolved "
                      "references ('??').")
 
+
+
+    # ------------------------------------------------------- IEEE template rules
+    SMALL_WORDS = {"a", "an", "the", "and", "or", "nor", "but", "of", "in", "on", "for", "to",
+                   "with", "at", "by", "from", "via", "vs", "vs.", "as", "into", "over", "per",
+                   "using", "under", "upon", "than", "is", "are", "be"}
+
+    def _column_of(self, rect, pno):
+        """(x0, x1) of the column (or full text width) an object belongs to."""
+        r = self.page_rects[pno]
+        m = spec.MARGINS[self.paper]
+        cx = r.width / 2
+        if pno in getattr(self, "two_col_pages", set()):
+            if rect.x1 <= cx + 6:
+                return m["left"], cx
+            if rect.x0 >= cx - 6:
+                return cx, r.width - m["right"]
+        return m["left"], r.width - m["right"]
+
+    def check_template_rules(self):
+        """Rules written in the official IEEE conference template."""
+        T = "IEEE template"
+        cap_blocks = {(i["line"].page, i["line"].block) for i in
+                      getattr(self, "figs", []) + getattr(self, "tabs", [])}
+        refs_line = getattr(self, "refs_line", None)
+        text, page_at = self._text_with_pages(
+            lambda ln: (ln.page, ln.block) not in cap_blocks, before=refs_line)
+
+        # 1. single spacing -------------------------------------------------------
+        gaps = []
+        for pno in getattr(self, "two_col_pages", set()):
+            cx = self.page_rects[pno].width / 2
+            for side in (0, 1):
+                col = sorted((ln for ln in self.body_lines if ln.page == pno and
+                              ((ln.bbox.x1 <= cx + 3) if side == 0 else (ln.bbox.x0 >= cx - 3))),
+                             key=lambda l: l.bbox.y1)
+                for a, b in zip(col, col[1:]):
+                    g = b.bbox.y1 - a.bbox.y1
+                    if 0.8 * self.body_size < g < 3 * self.body_size:
+                        gaps.append(g)
+        if len(gaps) > 30:
+            gaps.sort()
+            lead = gaps[len(gaps) // 2]
+            self.res.measurements["Line spacing"] = f"{lead:.1f} pt (body {self.body_size:g} pt)"
+            ratio = lead / self.body_size
+            if ratio > 1.55:
+                self.add(ERROR if ratio > 1.8 else WARNING, T,
+                         f"Body text is not single-spaced (lines are {lead:.1f} pt apart for "
+                         f"{self.body_size:g} pt text). The IEEE template uses single spacing "
+                         "(about 12 pt).")
+            elif ratio < 1.08:
+                self.add(WARNING, T, f"Line spacing is squeezed ({lead:.1f} pt for "
+                         f"{self.body_size:g} pt text). Do not reduce spacing to meet the page "
+                         "limit.")
+            else:
+                self.add(PASS, T, f"Body text is single-spaced ({lead:.1f} pt line spacing).")
+
+        # 2. justified text -------------------------------------------------------
+        flush = total = 0
+        for pno in getattr(self, "two_col_pages", set()):
+            cx = self.page_rects[pno].width / 2
+            for side in (0, 1):
+                col = [ln for ln in self.body_lines if ln.page == pno and
+                       ((ln.bbox.x1 <= cx + 3) if side == 0 else (ln.bbox.x0 >= cx - 3))]
+                if len(col) < 8:
+                    continue
+                edge = sorted(ln.bbox.x1 for ln in col)[int(0.9 * (len(col) - 1))]
+                total += len(col)
+                flush += sum(1 for ln in col if ln.bbox.x1 >= edge - 2.5)
+        if total > 40:
+            share = flush / total
+            if share < 0.5:
+                self.add(WARNING, T, f"Body text seems left-aligned (only {share:.0%} of lines "
+                         "reach the right edge of the column). The IEEE template uses "
+                         "justified text.")
+            else:
+                self.add(PASS, T, "Body text is justified.")
+
+        # 3. black body text --------------------------------------------------------
+        body_ids = {(ln.page, round(ln.bbox.y0, 1)) for ln in self.body_lines}
+        coloured = []
+        for pno, rect, t, size, font, color, flags in self.span_info:
+            if len(t.strip()) < 2 or abs(size - self.body_size) > 0.7:
+                continue
+            rgb = ((color >> 16) & 255, (color >> 8) & 255, color & 255)
+            if max(rgb) - min(rgb) > 60 or min(rgb) > 120:      # clearly coloured / grey
+                if any(abs(rect.y0 - y) < 3 and pg == pno for pg, y in body_ids):
+                    coloured.append((pno + 1, rect_t(rect), t.strip()))
+        if coloured:
+            self.add(WARNING, T, f"{len(coloured)} piece(s) of body text are coloured (e.g. \""
+                     + _clip(coloured[0][2], 40) + "\"). Body text, citations and links should "
+                     "be black.", page=coloured[0][0], rect=coloured[0][1],
+                     extra=[(p, r) for p, r, _ in coloured[1:15]],
+                     detail="LaTeX: remove hyperref or use \\usepackage[hidelinks]{hyperref}. "
+                            "Word: set the hyperlink style to black.")
+
+        # 4. text too small to read (figure labels: 8 pt in the template) -------------
+        tiny = [(pno + 1, rect_t(rect), t.strip()) for pno, rect, t, size, font, color, flags
+                in self.span_info if size < 5.5 and len(t.strip()) >= 2 and not (flags & 1)
+                and not is_math(font) and any(c.isalpha() for c in t)]
+        if len(tiny) >= 3:
+            pages = sorted({p for p, _, _ in tiny})
+            self.add(WARNING, T, f"{len(tiny)} piece(s) of text are smaller than 6 pt (e.g. "
+                     f"\"{_clip(tiny[0][2], 30)}\"), usually labels inside figures. They will be "
+                     "unreadable in print.", page=tiny[0][0], rect=tiny[0][1],
+                     extra=[(p, r) for p, r, _ in tiny[1:20]],
+                     detail="The IEEE template asks for 8 pt Times New Roman figure labels. "
+                            "Pages: " + ", ".join(map(str, pages)))
+
+        # 5. title: no symbols / math / footnotes; Title Case -------------------------
+        p1 = [ln for ln in self.lines if ln.page == 0 and ln.horizontal]
+        top = [ln for ln in p1 if ln.bbox.y0 < 0.45 * self.page_rects[0].height]
+        if top:
+            tsize = max(ln.size for ln in top)
+            tl = [ln for ln in top if ln.size >= tsize - 0.6]
+            trect = pymupdf.Rect()
+            for ln in tl:
+                trect |= ln.bbox
+            title = " ".join(ln.text for ln in tl)
+            tspans = [x for x in self.span_info if x[0] == 0 and trect.intersects(x[1])]
+            mathy = [x[2] for x in tspans if is_math(x[4]) and not is_times(x[4])]
+            supers = [x[2] for x in tspans if x[6] & 1 or x[3] < tsize * 0.6]
+            symb = re.findall(r"[Ͱ-Ͽ∀-⋿$\\^_~*†‡]", title)
+            if mathy or symb or supers:
+                what = (["math"] if mathy else []) + (["symbols"] if symb else []) + \
+                       (["footnote marks"] if supers else [])
+                self.add(ERROR, T, "The title contains " + " / ".join(what) + ". The IEEE "
+                         "template says: do not use symbols, special characters, footnotes or "
+                         "math in the paper title.", page=1, rect=rect_t(trect))
+            words = [w for w in re.findall(r"[A-Za-z][A-Za-z'\-]*", title)]
+            content = [w for i, w in enumerate(words) if i == 0 or w.lower() not in self.SMALL_WORDS]
+            if len(content) >= 3 and not title.isupper():
+                caps = sum(1 for w in content if w[0].isupper())
+                if caps / len(content) < 0.6:
+                    self.add(INFO, T, "The title is not in Title Case (capitalise the main "
+                             "words, e.g. \"Robust Deepfake Detection Under Real-World "
+                             "Perturbations\").", page=1, rect=rect_t(trect))
+        # 6. abstract: no symbols / math; Index Terms count -------------------------
+        ab = [ln for ln in p1 if re.match(r"^\s*abstract", ln.text, re.I)]
+        kw = [ln for ln in p1 if re.match(r"^\s*(index\s*terms|key\s*words|keywords)", ln.text, re.I)]
+        if ab:
+            a0 = ab[0]
+            alines = [ln for ln in p1 if ln.block == a0.block]     # the abstract paragraph
+            arect = pymupdf.Rect()
+            for ln in alines:
+                arect |= ln.bbox
+            aspans = [x for x in self.span_info if x[0] == 0 and arect.intersects(x[1])]
+            amath = [x[2] for x in aspans if is_math(x[4]) and not is_times(x[4])
+                     and x[2].strip()]
+            atext = " ".join(ln.text for ln in alines)
+            asym = re.findall(r"[Ͱ-Ͽ∀-⋿$\\^_]", atext)
+            if amath or asym:
+                self.add(WARNING, T, "The abstract contains math or symbols (e.g. \""
+                         + _clip((amath or asym)[0], 20) + "\"). The IEEE template says: do not "
+                         "use symbols, special characters, footnotes or math in the abstract.",
+                         page=1, rect=rect_t(arect) if not arect.is_empty else None)
+        if kw:
+            k = kw[0]
+            ktext = " ".join(ln.text for ln in p1 if ln.block == k.block)
+            ktext = re.split(r"(?i)index\s*terms|key\s*words|keywords", ktext, maxsplit=1)[-1]
+            ktext = ktext.lstrip(" —–-:.")
+            terms = [t for t in re.split(r"[,;]", ktext) if t.strip()]
+            self.res.measurements["Index Terms"] = len(terms)
+            if len(terms) < 3 or len(terms) > 10:
+                self.add(INFO, T, f"{len(terms)} index term(s)/keyword(s) given; 3-10 are "
+                         "usual.", page=1, rect=rect_t(k.bbox))
+
+        # 7. subsection letters A., B., C. ---------------------------------------
+        cur_sec, letters, bad = None, [], []
+        romans = {id(ln) for ln in self.lines if ROMAN_HEAD_RE.match(ln.text or "")}
+        for ln in self.lines:
+            if refs_line is not None and self._after(ln, refs_line):
+                break
+            if id(ln) in romans:
+                cur_sec, letters = ln.text, []
+                continue
+            mt = re.match(r"^\s*([A-H])\.\s+([A-Z][^.]{2,60})$", ln.text)
+            italic = "italic" in ln.font.lower() or "oblique" in ln.font.lower() or \
+                     re.search(r"(-|\b)(it|ti|i)\b", ln.font.lower() or "")
+            if mt and ln.first_in_block and italic and len(ln.text) < 70:
+                letter = mt.group(1)
+                expect = chr(ord("A") + len(letters))
+                if letter != expect:
+                    bad.append((ln, letter, expect))
+                letters.append(letter)
+        if bad:
+            ln, got, exp = bad[0]
+            self.add(WARNING, T, f"Subsection lettering skips: found \"{got}.\" where \"{exp}.\" "
+                     "was expected (IEEE subsections are A., B., C., ...).",
+                     page=ln.page + 1, rect=rect_t(ln.bbox))
+
+        # 8. wording rules from the template ------------------------------------
+        def rule(pattern, sev, msg, detail, flags=0):
+            hits = [(page_at(m.start()), m.group(0)) for m in re.finditer(pattern, text, flags)]
+            if hits:
+                pg, rc, ex = self._places([(p, [t.strip()]) for p, t in hits[:15]])
+                self.add(sev, T, msg.format(n=len(hits), ex=_clip(hits[0][1].strip(), 30)),
+                         page=pg or hits[0][0], rect=rc, extra=ex, detail=detail)
+        rule(r"\bFigures?\s+\d+", WARNING,
+             "\"Figure\" is written out {n} time(s) in the text (e.g. \"{ex}\").",
+             "The IEEE template says: use the abbreviation \"Fig. 1\", even at the beginning "
+             "of a sentence.")
+        rule(r"(?<=[a-z,;] )(Eqs?\.|[Ee]quations?)\s*~?\(\d+\)", INFO,
+             "Equations are referred to as \"{ex}\" {n} time(s).",
+             "The IEEE template says: refer to \"(1)\", not \"Eq. (1)\" or \"equation (1)\", "
+             "except at the beginning of a sentence.")
+        rule(r"\b(Ref\.|[Rr]eference)\s*\[\d+\]", WARNING,
+             "References are cited as \"{ex}\" {n} time(s).",
+             "The IEEE template says: refer simply to the reference number, as in [3]; do not "
+             "use \"Ref. [3]\" or \"reference [3]\" except at the beginning of a sentence.")
+        rule(r"(?<![\w.\d])\.\d+\b", WARNING,
+             "Decimal number(s) without a leading zero (e.g. \"{ex}\"), {n} time(s).",
+             "The IEEE template says: use a zero before decimal points, \"0.25\" not \".25\".")
+
+        # 9. figures and tables: top/bottom of columns, after first citation -------
+        placed_mid, before_cite = [], []
+        for kind, items, refs in (("Fig.", getattr(self, "figs", []), getattr(self, "fig_refs", {})),
+                                  ("TABLE", getattr(self, "tabs", []), getattr(self, "tab_refs", {}))):
+            for it in items:
+                ln = it["line"]
+                pno = ln.page
+                obj = pymupdf.Rect(ln.bbox)
+                for o in self.lines:
+                    if o.page == pno and o.block == ln.block:
+                        obj |= o.bbox
+                for g in self._graphics(pno):
+                    hov = min(g.x1, obj.x1) - max(g.x0, obj.x0) > 0.3 * min(g.width, obj.width or 1)
+                    near = (0 <= obj.y0 - g.y1 < 60) or (0 <= g.y0 - obj.y1 < 120)
+                    if hov and near:
+                        obj |= g
+                x0, x1 = self._column_of(obj, pno)
+                above = [b for b in self.body_lines if b.page == pno and b.bbox.y1 < obj.y0 - 2
+                         and b.bbox.x0 >= x0 - 3 and b.bbox.x1 <= x1 + 3]
+                below = [b for b in self.body_lines if b.page == pno and b.bbox.y0 > obj.y1 + 2
+                         and b.bbox.x0 >= x0 - 3 and b.bbox.x1 <= x1 + 3]
+                label = f"{kind} {it.get('raw', it['num'])}"
+                if len(above) >= 2 and len(below) >= 2:
+                    placed_mid.append((pno + 1, rect_t(obj), label))
+                first = min(refs.get(it["num"], [10 ** 6]))
+                if first < 10 ** 6 and pno + 1 < first:
+                    before_cite.append((pno + 1, rect_t(obj), label, first))
+        if placed_mid:
+            self.add(WARNING, T, f"{len(placed_mid)} figure(s)/table(s) are in the middle of a "
+                     "column: " + ", ".join(f"{l} (p. {p})" for p, _, l in placed_mid[:8]) + ".",
+                     page=placed_mid[0][0], rect=placed_mid[0][1],
+                     extra=[(p, r) for p, r, _ in placed_mid[1:]],
+                     detail="The IEEE template says: place figures and tables at the top and "
+                            "bottom of columns; avoid placing them in the middle of columns. "
+                            "LaTeX: use [t] or [b] placement.")
+        if before_cite:
+            self.add(WARNING, T, "Figure(s)/table(s) appear before the page where they are first "
+                     "mentioned: " + ", ".join(f"{l} on p. {p}, first mentioned on p. {f}"
+                                               for p, _, l, f in before_cite[:6]) + ".",
+                     page=before_cite[0][0], rect=before_cite[0][1],
+                     extra=[(p, r) for p, r, _, _ in before_cite[1:]],
+                     detail="The IEEE template says: insert figures and tables after they are "
+                            "cited in the text.")
+
+        # 10. references: year present, no "et al." in the list ---------------------
+        cites = getattr(self.res, "citations", [])
+        no_year = [c for c in cites if c.get("full") and not re.search(r"\b(19|20)\d{2}\b", c["full"])
+                   and "unpublished" not in c["full"].lower() and "submitted" not in c["full"].lower()]
+        if no_year:
+            self.add(WARNING, T, f"{len(no_year)} reference(s) have no year: "
+                     + ", ".join(f"[{c['ref']}]" for c in no_year[:12]) + ".",
+                     page=no_year[0].get("page"), rect=no_year[0].get("rect"),
+                     extra=[(c["page"], c["rect"]) for c in no_year[1:12] if c.get("rect")])
+        etal = [c for c in cites if c.get("full") and re.search(r"\bet\.?\s*al\b", c["full"])]
+        if etal:
+            self.add(INFO, T, f"{len(etal)} reference(s) use \"et al.\" in the reference list: "
+                     + ", ".join(f"[{c['ref']}]" for c in etal[:12]) + ".",
+                     page=etal[0].get("page"), rect=etal[0].get("rect"),
+                     extra=[(c["page"], c["rect"]) for c in etal[1:12] if c.get("rect")],
+                     detail="The IEEE template says: give all authors' names; do not use "
+                            "\"et al.\" unless there are six authors or more.")
+
+        # 11. camera-ready: IEEE copyright notice at the bottom of page 1 ------------
+        if self.stage != "review":
+            cr = getattr(self, "copyright_line", None)
+            if cr:
+                self.add(PASS, T, "IEEE copyright notice found at the bottom of page 1.",
+                         detail=cr[2][:120])
+            else:
+                self.add(WARNING, T, "No IEEE copyright notice at the bottom of page 1 (e.g. "
+                         "\"979-8-xxxx-xxxx-x/26/$31.00 ©2026 IEEE\").", page=1,
+                         detail="Most IEEE conferences require this line on the first page of "
+                                "the camera-ready paper. Use the exact text your conference "
+                                "gives you (LaTeX: \\IEEEoverridecommandlockouts and "
+                                "\\IEEEpubid{...}).")
 
     # ------------------------------------------------ author details / anonymity
     AFFIL_RE = re.compile(

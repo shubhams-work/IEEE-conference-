@@ -56,6 +56,7 @@ Get the installer for your system from the **[download page](https://shubhams-wo
 | 📊 **Tables** | Tables must be real tables, not **pasted pictures**; screenshots of tables or text are detected |
 | 🖼️ **Image quality** | Photos ≥ 300 dpi, diagrams ≥ 600 dpi at printed size; **upscaled or blurry** images; diagrams saved as JPEG |
 | 🔤 **Fonts & style** | Times 10 pt body, 24 pt title, 9 pt abstract, 8 pt captions and references; Roman-numeral headings; `Fig. N.` and `TABLE I` captions |
+| 📘 **IEEE template rules** | Single-spaced, justified, black body text; text in figures not below 6 pt (template: 8 pt labels); no symbols, math or footnotes in the title or abstract; Title Case; 3–10 index terms; subsections A., B., C.; *"Fig. 1"* even at the start of a sentence; *"(1)"* not *"Eq. (1)"*; *"[3]"* not *"Ref. [3]"*; *"0.25"* not *".25"*; figures and tables at the top or bottom of columns and after their first mention; references with a year and without *"et al."*; IEEE copyright notice on the camera-ready paper |
 | 🧹 **Leftovers** | Template placeholder text, unresolved `??` / `[?]`, Word *"Error! Reference source not found"*, page numbers, headers, arXiv stamps |
 
 ## How to use
