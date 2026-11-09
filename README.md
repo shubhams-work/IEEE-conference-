@@ -21,10 +21,10 @@ computer needs nothing else.
 
 | System  | Installer | How to install |
 |---------|-----------|----------------|
-| Windows 10/11 | `IEEE-Paper-Checker-Setup-1.3.0.exe` | Double-click and follow the wizard. No admin rights needed (you can choose "all users"). Adds Start Menu and desktop shortcuts, a **"Check IEEE format"** entry when you right-click a PDF, and an uninstaller in *Settings → Apps*. If SmartScreen appears: *More info → Run anyway*. |
-| macOS   | `IEEE-Paper-Checker-1.3.0-macOS-arm64.dmg` (Apple silicon M1–M4) or `...-x86_64.dmg` (Intel) | Open the .dmg and drag the app onto *Applications*. The app is unsigned, so the first start is blocked: open it once, then go to *System Settings → Privacy & Security* and click **Open Anyway** (on macOS 14 and older you can instead right-click the app → *Open*). Alternative in Terminal: `xattr -dr com.apple.quarantine /Applications/IEEE-Paper-Checker.app`. Uninstall: drag it to the Bin. |
-| Ubuntu / Debian / Mint | `ieee-paper-checker_1.3.0_amd64.deb` | Double-click (Software Center) or `sudo apt install ./ieee-paper-checker_1.3.0_amd64.deb`. Uninstall: `sudo apt remove ieee-paper-checker`. |
-| Other Linux | `IEEE-Paper-Checker-1.3.0-linux-x64.tar.gz` | Unpack, then run `./install.sh` (no sudo). Uninstall: `./install.sh --uninstall`. |
+| Windows 10/11 | `IEEE-Paper-Checker-Setup-1.3.1.exe` | Double-click and follow the wizard. No admin rights needed (you can choose "all users"). Adds Start Menu and desktop shortcuts, a **"Check IEEE format"** entry when you right-click a PDF, and an uninstaller in *Settings → Apps*. If SmartScreen appears: *More info → Run anyway*. |
+| macOS   | `IEEE-Paper-Checker-1.3.1-macOS-arm64.dmg` (Apple silicon M1–M4) or `...-x86_64.dmg` (Intel) | Open the .dmg and drag the app onto *Applications*. The app is unsigned, so the first start is blocked: open it once, then go to *System Settings → Privacy & Security* and click **Open Anyway** (on macOS 14 and older you can instead right-click the app → *Open*). Alternative in Terminal: `xattr -dr com.apple.quarantine /Applications/IEEE-Paper-Checker.app`. Uninstall: drag it to the Bin. |
+| Ubuntu / Debian / Mint | `ieee-paper-checker_1.3.1_amd64.deb` | Double-click (Software Center) or `sudo apt install ./ieee-paper-checker_1.3.1_amd64.deb`. Uninstall: `sudo apt remove ieee-paper-checker`. |
+| Other Linux | `IEEE-Paper-Checker-1.3.1-linux-x64.tar.gz` | Unpack, then run `./install.sh` (no sudo). Uninstall: `./install.sh --uninstall`. |
 
 After installing, open **IEEE Paper Format Checker** from the Start Menu,
 Launchpad or applications menu, or right-click a PDF and choose it.
@@ -33,7 +33,7 @@ Launchpad or applications menu, or right-click a PDF and choose it.
 
 * **Automatically on GitHub (all systems at once).** Push this folder to a GitHub
   repository, open *Actions → Build installers → Run workflow*, and download the
-  installers from the finished run. Pushing a tag such as `v1.3.0` also publishes
+  installers from the finished run. Pushing a tag such as `v1.3.1` also publishes
   them as a Release.
 * **On your own computer.** A computer can only build its own system's installer:
   * Windows: install Python and [Inno Setup](https://jrsoftware.org/isdl.php) (version 6 or 7), then run `build_windows.bat`

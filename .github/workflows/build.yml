@@ -1,9 +1,14 @@
-name: Build installers
-# Builds installers for every platform:
+name: Build and test installers
+# Builds the installers for every platform, INSTALLS each one on a clean GitHub
+# machine and tests the installed app end-to-end:
 #   Windows : IEEE-Paper-Checker-Setup-<ver>.exe
 #   macOS   : IEEE-Paper-Checker-<ver>-macOS-arm64.dmg (Apple silicon) and -x86_64.dmg (Intel)
 #   Linux   : ieee-paper-checker_<ver>_amd64.deb and IEEE-Paper-Checker-<ver>-linux-x64.tar.gz
-# Run it from the Actions tab ("Run workflow"), or push a tag like v1.1.0 to also
+# Tests (tests/ci_check.py): the installed app must find every planted problem in
+# tests/samples/sample_errors.pdf, pass the clean sample, write the HTML report and
+# annotated PDF, and its window must open and check a paper on its own.
+# Test outputs (reports, annotated PDFs, macOS screenshot) are uploaded as artifacts.
+# Run from the Actions tab ("Run workflow"), or push a tag like v1.3.1 to also
 # publish the installers as a GitHub Release.
 on:
   push:
@@ -25,11 +30,33 @@ jobs:
       - name: Build installer
         shell: cmd
         run: build_windows.bat
-      - name: Smoke test
-        shell: cmd
-        run: dist\IEEE-Paper-Checker\ieee-check.exe --help
+      - name: Install the app with the Setup.exe
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist\*Setup*.exe | Select-Object -First 1
+          Start-Process $setup.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CURRENTUSER' -Wait
+          $app = "$env:LOCALAPPDATA\Programs\IEEE Paper Checker"
+          if (-not (Test-Path "$app\ieee-check.exe")) { throw "installation failed" }
+          "APP=$app" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Test the installed app (paper checks)
+        run: python tests/ci_check.py "$env:APP\ieee-check.exe"
+      - name: Test the installed app (window opens and checks a paper)
+        shell: pwsh
+        run: |
+          Copy-Item tests\samples\sample_errors.pdf $env:RUNNER_TEMP\gui_test.pdf
+          $p = Start-Process "$env:APP\IEEE-Paper-Checker.exe" -ArgumentList "`"$env:RUNNER_TEMP\gui_test.pdf`"" -PassThru
+          Start-Sleep 40
+          $p.Refresh()
+          if ($p.HasExited) { throw "the window closed or crashed" }
+          if (-not (Test-Path "$env:RUNNER_TEMP\gui_test_IEEE_report.html")) { throw "the window did not check the paper" }
+          Stop-Process -Id $p.Id -Force
+          New-Item -ItemType Directory -Force test-results | Out-Null
+          Copy-Item "$env:RUNNER_TEMP\gui_test_IEEE_*" test-results\
       - uses: actions/upload-artifact@v4
         with: { name: windows-installer, path: "dist/*Setup*.exe" }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: test-results-windows, path: test-results, if-no-files-found: ignore }
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with: { files: "dist/*Setup*.exe" }
@@ -38,7 +65,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, macos-15-intel]      # Apple silicon (arm64), Intel (x86_64)
+        include:
+          - os: macos-14            # Apple silicon (M1-M4), arm64
+            arch: arm64
+          - os: macos-15-intel      # Intel Mac, x86_64
+            arch: x86_64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -46,10 +77,37 @@ jobs:
         with: { python-version: "3.12" }
       - name: Build .dmg
         run: chmod +x build_mac.sh && ./build_mac.sh
-      - name: Smoke test
-        run: dist/IEEE-Paper-Checker.app/Contents/MacOS/IEEE-Paper-Checker --help
+      - name: Install from the .dmg (like a user)
+        run: |
+          DMG=$(ls dist/*.dmg | head -1)
+          echo "Built: $DMG"
+          hdiutil attach "$DMG" -nobrowse -mountpoint /tmp/ieee_dmg
+          mkdir -p "$RUNNER_TEMP/Applications"
+          cp -R "/tmp/ieee_dmg/IEEE-Paper-Checker.app" "$RUNNER_TEMP/Applications/"
+          hdiutil detach /tmp/ieee_dmg
+          APP="$RUNNER_TEMP/Applications/IEEE-Paper-Checker.app"
+          echo "APP=$APP" >> "$GITHUB_ENV"
+          echo "Architecture of the installed app:"
+          file "$APP/Contents/MacOS/IEEE-Paper-Checker"
+          file "$APP/Contents/MacOS/IEEE-Paper-Checker" | grep -q "${{ matrix.arch }}"
+      - name: Test the installed app (paper checks)
+        run: python tests/ci_check.py "$APP/Contents/MacOS/IEEE-Paper-Checker"
+      - name: Test the installed app (window opens and checks a paper)
+        run: |
+          cp tests/samples/sample_errors.pdf "$RUNNER_TEMP/gui_test.pdf"
+          open -n "$APP" --args "$RUNNER_TEMP/gui_test.pdf"
+          sleep 45
+          pgrep -f "IEEE-Paper-Checker.app/Contents/MacOS/IEEE-Paper-Checker" || { echo "the app is not running (crashed?)"; exit 1; }
+          mkdir -p test-results
+          screencapture -x "test-results/macos-${{ matrix.arch }}-screenshot.png" || true
+          test -f "$RUNNER_TEMP/gui_test_IEEE_report.html" || { echo "the window did not check the paper"; exit 1; }
+          cp "$RUNNER_TEMP"/gui_test_IEEE_* test-results/
+          pkill -f "IEEE-Paper-Checker.app/Contents/MacOS/IEEE-Paper-Checker" || true
       - uses: actions/upload-artifact@v4
-        with: { name: "macos-installer-${{ matrix.os }}", path: "dist/*.dmg" }
+        with: { name: "macos-installer-${{ matrix.arch }}", path: "dist/*.dmg" }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: "test-results-macos-${{ matrix.arch }}", path: test-results, if-no-files-found: ignore }
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with: { files: "dist/*.dmg" }
@@ -59,17 +117,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build dependencies
-        run: sudo apt-get update && sudo apt-get install -y python3-venv python3-tk binutils
+        run: sudo apt-get update && sudo apt-get install -y python3-venv python3-tk binutils xvfb
       - name: Build .deb and .tar.gz
         run: chmod +x build_linux.sh && ./build_linux.sh
-      - name: Smoke test
-        run: dist/IEEE-Paper-Checker/ieee-check --help
+      - name: Install the .deb (like a user)
+        run: sudo apt-get install -y ./dist/*.deb
+      - name: Test the installed app (paper checks)
+        run: python3 tests/ci_check.py /usr/bin/ieee-check
+      - name: Test the installed app (window opens and checks a paper)
+        run: |
+          cp tests/samples/sample_errors.pdf "$RUNNER_TEMP/gui_test.pdf"
+          xvfb-run -a bash -c 'ieee-paper-checker "$RUNNER_TEMP/gui_test.pdf" & PID=$!; sleep 30; kill -0 $PID || { echo "the app is not running"; exit 1; }; kill $PID'
+          test -f "$RUNNER_TEMP/gui_test_IEEE_report.html" || { echo "the window did not check the paper"; exit 1; }
+          mkdir -p test-results && cp "$RUNNER_TEMP"/gui_test_IEEE_* test-results/
       - uses: actions/upload-artifact@v4
         with:
           name: linux-installers
           path: |
             dist/*.deb
             dist/*.tar.gz
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: test-results-linux, path: test-results, if-no-files-found: ignore }
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:

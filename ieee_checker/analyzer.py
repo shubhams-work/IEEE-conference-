@@ -12,6 +12,14 @@ import pymupdf
 
 from . import imagecheck, spec
 
+try:  # keep PyMuPDF's hints ("Consider using pymupdf_layout ...") out of our output
+    os.environ.setdefault("PYMUPDF_SUGGEST_LAYOUT_ANALYZER", "0")
+    if hasattr(pymupdf, "no_recommend_layout"):
+        pymupdf.no_recommend_layout()
+    pymupdf.set_messages(pylogging=True)
+except Exception:  # noqa: BLE001
+    pass
+
 ERROR, WARNING, INFO, PASS = "error", "warning", "info", "pass"
 SEV_ORDER = {ERROR: 0, WARNING: 1, INFO: 2, PASS: 3}
 
