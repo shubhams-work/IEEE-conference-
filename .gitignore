@@ -9,3 +9,4 @@ __pycache__/
 
 # local test outputs
 *.log
+test_papers/

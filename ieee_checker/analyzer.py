@@ -510,6 +510,7 @@ class Analyzer:
                 elif re.fullmatch(r"(page\s*)?[-–]?\s*\d{1,4}\s*[-–]?(\s*(of|/)\s*\d+)?", t,
                                   re.I):
                     page_numbers.append(pno + 1)
+                    self._pn_rects = getattr(self, "_pn_rects", []) + [(pno + 1, rect_t(ln.bbox))]
                     margin_lines.add(key)
                 elif pno == 0 and outside_bot and re.search(
                         r"(©|\(c\)|copyright|IEEE|\$\d|97[89]-|DOI|ISBN|\d{4}\s*IEEE)", t, re.I):
@@ -541,7 +542,13 @@ class Analyzer:
                         "top": top_lim - rect.y0, "bottom": rect.y1 - bot_lim}
                 for side, v in intr.items():
                     if v > spec.MARGIN_TOL_SILENT:
-                        offenders[side].append(rect)
+                        # keep only the part that actually lies inside the margin
+                        strip = {"left": pymupdf.Rect(rect.x0, rect.y0, min(rect.x1, left_lim), rect.y1),
+                                 "right": pymupdf.Rect(max(rect.x0, right_lim), rect.y0, rect.x1, rect.y1),
+                                 "top": pymupdf.Rect(rect.x0, rect.y0, rect.x1, min(rect.y1, top_lim)),
+                                 "bottom": pymupdf.Rect(rect.x0, max(rect.y0, bot_lim), rect.x1, rect.y1),
+                                 }[side]
+                        offenders[side].append(strip)
                         if v > worst[side][0]:
                             worst[side] = (v, rect, kind)
             for side, (v, rect, kind) in worst.items():
@@ -569,9 +576,11 @@ class Analyzer:
                      detail=f"Required minimum {side} margin is {fmt_in(m[side])}. Pages: "
                             + ", ".join(map(str, pages)) + f". Worst on page {worst[0]}.")
         if page_numbers:
+            pn = getattr(self, "_pn_rects", [])
             self.add(WARNING, "Margins", "Page numbers found. IEEE conference camera-ready "
                      "papers must not contain page numbers (they are added by IEEE).",
-                     detail="Pages: " + ", ".join(map(str, sorted(set(page_numbers)))))
+                     detail="Pages: " + ", ".join(map(str, sorted(set(page_numbers)))),
+                     page=pn[0][0] if pn else None, rect=pn[0][1] if pn else None, extra=pn[1:])
         if headers:
             pages = sorted({h[0] for h in headers})
             self.add(WARNING, "Margins", "Header/footer text found in the margins. IEEE "
@@ -807,27 +816,40 @@ class Analyzer:
         raw = {t["num"]: t["raw"] for t in tabs}
         unref_f = sorted(fig_nums - set(fig_refs))
         unref_t = sorted(tab_nums - set(tab_refs))
+        cap_of = {("f", f["num"]): f["line"] for f in figs}
+        cap_of.update({("t", t["num"]): t["line"] for t in tabs})
         if unref_f:
+            caps = [cap_of[("f", n)] for n in unref_f]
             self.add(ERROR, "In-text references", "Figure(s) never referred to in the text: "
                      + ", ".join(f"Fig. {n}" for n in unref_f) + ". Every figure must be "
-                     "cited in the text (e.g. \"as shown in Fig. 1\").")
+                     "cited in the text (e.g. \"as shown in Fig. 1\").",
+                     page=caps[0].page + 1, rect=rect_t(caps[0].bbox),
+                     extra=[(c.page + 1, rect_t(c.bbox)) for c in caps[1:]])
         if unref_t:
+            caps = [cap_of[("t", n)] for n in unref_t]
             self.add(ERROR, "In-text references", "Table(s) never referred to in the text: "
                      + ", ".join(f"TABLE {raw.get(n, n)}" for n in unref_t) + ". Every table "
-                     "must be cited in the text (e.g. \"Table I lists ...\").")
+                     "must be cited in the text (e.g. \"Table I lists ...\").",
+                     page=caps[0].page + 1, rect=rect_t(caps[0].bbox),
+                     extra=[(c.page + 1, rect_t(c.bbox)) for c in caps[1:]])
         if figs:
             bad = sorted(n for n in fig_refs if n not in fig_nums and n < 100)
             if bad:
+                pg, rc, ex = self._places([(fig_refs[n][0], [f"Fig. {n}", f"Figure {n}",
+                                                             f"Fig.{n}"]) for n in bad])
                 self.add(ERROR, "In-text references", "The text refers to figure(s) that do not "
                          "exist: " + ", ".join(f"Fig. {n} (p. {fig_refs[n][0]})" for n in bad) + ".",
                          detail=f"The paper has {len(fig_nums)} figure caption(s): "
-                                + ", ".join(map(str, sorted(fig_nums))))
+                                + ", ".join(map(str, sorted(fig_nums))),
+                         page=pg, rect=rc, extra=ex)
         if tabs:
             bad = sorted(n for n in tab_refs if n not in tab_nums and n < 100)
             if bad:
+                pg, rc, ex = self._places([(tab_refs[n][0], [f"Table {self._roman(n)}",
+                                                             f"Table {n}"]) for n in bad])
                 self.add(ERROR, "In-text references", "The text refers to table(s) that do not "
                          "exist: " + ", ".join(f"Table {self._roman(n)} (p. {tab_refs[n][0]})"
-                                               for n in bad) + ".")
+                                               for n in bad) + ".", page=pg, rect=rc, extra=ex)
         if (figs or tabs) and not unref_f and not unref_t:
             self.add(PASS, "In-text references", "Every figure and table is referred to in "
                      "the text.")
@@ -868,9 +890,12 @@ class Analyzer:
             self.res.measurements["Numbered equations"] = len(eqs)
             bad = sorted(n for n in eq_refs if n not in eqs)
             if bad:
+                pg, rc, ex = self._places([(eq_refs[n][0], [f"Eq. ({n})", f"Equation ({n})",
+                                                            f"Eq. {n}", f"({n})"]) for n in bad])
                 self.add(ERROR, "In-text references", "The text refers to equation(s) that do not "
                          "exist: " + ", ".join(f"({n}) on p. {eq_refs[n][0]}" for n in bad) + ".",
-                         detail="Equation numbers found: " + ", ".join(map(str, sorted(eqs))))
+                         detail="Equation numbers found: " + ", ".join(map(str, sorted(eqs))),
+                         page=pg, rect=rc, extra=ex)
             if sorted(eqs) != list(range(1, max(eqs) + 1)):
                 missing = sorted(set(range(1, max(eqs) + 1)) - eqs)
                 if len(missing) <= 10:
@@ -888,9 +913,36 @@ class Analyzer:
                 if n and n not in secs:
                     bad.append((mt.group(1), pages_at(mt.start())))
             if bad:
+                pg, rc, ex = self._places([(p, [f"Section {s}", f"Sec. {s}"]) for s, p in bad[:10]])
                 self.add(ERROR, "In-text references", "The text refers to section(s) that do not "
                          "exist: " + ", ".join(f"Section {s} (p. {p})" for s, p in bad[:10]) + ".",
-                         detail=f"The paper has sections I-{self._roman(max(secs))}.")
+                         detail=f"The paper has sections I-{self._roman(max(secs))}.",
+                         page=pg, rect=rc, extra=ex)
+
+    def _find(self, page_no, needles):
+        """Rects of the first matching needle on a 1-based page (for annotations)."""
+        if not page_no:
+            return []
+        page = self.doc[page_no - 1]
+        for nd in needles:
+            try:
+                hits = page.search_for(nd)
+            except Exception:  # noqa: BLE001
+                hits = []
+            if hits:
+                return [rect_t(h) for h in hits]
+        return []
+
+    def _places(self, items):
+        """[(page, [needles])] -> (first page, first rect, extra [(page, rect)])"""
+        places = []
+        for pg, needles in items:
+            for r in self._find(pg, needles)[:3]:
+                if (pg, r) not in places:
+                    places.append((pg, r))
+        if not places:
+            return None, None, []
+        return places[0][0], places[0][1], places[1:]
 
     def _text_with_pages(self, keep=lambda ln: True, before=None):
         """Join text lines (de-hyphenated) and return (text, page_at(offset))."""
@@ -1222,7 +1274,8 @@ class Analyzer:
             if m:
                 current = int(m.group(1))
                 nums.append(current)
-                entries.setdefault(current, {"text": m.group(2), "page": ln.page + 1})
+                entries.setdefault(current, {"text": m.group(2), "page": ln.page + 1,
+                                             "rect": rect_t(ln.bbox)})
             elif current is not None and len(entries[current]["text"]) < 300:
                 entries[current]["text"] += " " + ln.text
         if not nums:
@@ -1277,16 +1330,20 @@ class Analyzer:
                      "reference must be cited in the text in IEEE style: [1], [2]-[4].")
         if uncited:
             sev = ERROR if spec.UNCITED_REFERENCE_IS_ERROR else WARNING
+            locs = [(entries[n]["page"], entries[n]["rect"]) for n in uncited if n in entries]
             self.add(sev, "Citations", f"{len(uncited)} of {len(set(nums))} reference(s) are "
                      "never cited in the text. Every reference must be cited.",
-                     page=entries[uncited[0]]["page"] if uncited[0] in entries else None,
+                     page=locs[0][0] if locs else None, rect=locs[0][1] if locs else None,
+                     extra=locs[1:],
                      detail="Not cited: " + "; ".join(
                          f"[{n}] {entries.get(n, {}).get('text', '')[:70]}" for n in uncited[:30]))
         if missing:
+            pg, rc, ex = self._places([(p, [f"[{n}]", f"[{n},", f", {n}]", f"{n}]"])
+                                       for n in missing for p in sorted(set(cites[n]))])
             self.add(ERROR, "Citations", "The text cites reference number(s) that are not in "
                      "the reference list: " + ", ".join(f"[{n}] (p. {cites[n][0]})"
                                                        for n in missing) + ".",
-                     page=cites[missing[0]][0])
+                     page=pg or cites[missing[0]][0], rect=rc, extra=ex)
         mx, bad = 0, []
         for n in order:
             if n in set(nums) and n > mx + 1:
@@ -1313,7 +1370,8 @@ class Analyzer:
                 "pages": ", ".join(map(str, pg)) or "-",
                 "status": ("MISSING FROM LIST" if n in missing else
                            "NOT CITED" if n not in cites else "cited"),
-                "text": entries.get(n, {}).get("text", "")[:110]})
+                "text": entries.get(n, {}).get("text", "")[:110],
+                "page": entries.get(n, {}).get("page"), "rect": entries.get(n, {}).get("rect")})
 
     # --------------------------------------------------------------- leftovers
     def check_leftovers(self):
@@ -1325,13 +1383,15 @@ class Analyzer:
                     found = True
                     sev = ERROR
                     self.add(sev, "Template text", f"Leftover template / error text: "
-                             f"\"{phrase}\"", page=pno + 1, rect=rect_t(hits[0]))
+                             f"\"{phrase}\"", page=pno + 1, rect=rect_t(hits[0]),
+                             extra=[(pno + 1, rect_t(h)) for h in hits[1:]])
             text = page.get_text("text")
             for m in re.finditer(r"(?<!\?)\?\?(?!\?)|\[\?\]|\[\?+\s*,", text):
                 hits = page.search_for(m.group(0))
                 self.add(ERROR, "Cross references", "Unresolved reference or citation "
                          f"('{m.group(0)}'): run LaTeX/BibTeX again or fix the label.",
-                         page=pno + 1, rect=rect_t(hits[0]) if hits else None)
+                         page=pno + 1, rect=rect_t(hits[0]) if hits else None,
+                         extra=[(pno + 1, rect_t(h)) for h in hits[1:]])
                 found = True
                 break
         if not found:

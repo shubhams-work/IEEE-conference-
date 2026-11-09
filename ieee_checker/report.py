@@ -203,44 +203,6 @@ document.querySelectorAll('.filters input').forEach(function(cb){{cb.addEventLis
 
 
 def write_annotated_pdf(res: Result, out_path: str, paper: str = "letter"):
-    """Copy of the paper with coloured boxes + sticky notes on each problem."""
-    from . import spec
-    doc = pymupdf.open(res.path)
-    m = spec.MARGINS.get(paper, spec.MARGINS["letter"])
-    for page in doc:
-        r = page.rect
-        area = pymupdf.Rect(m["left"], m["top"], r.width - m["right"], r.height - m["bottom"])
-        a = page.add_rect_annot(area)
-        a.set_colors(stroke=(0.3, 0.6, 1.0))
-        a.set_border(width=0.5, dashes=[3, 3])
-        a.set_info(title="IEEE checker", content="IEEE text area (margins)")
-        a.update(opacity=0.6)
-    notes_per_page = {}
-    for f in res.findings:
-        if f.severity in (PASS,) or not f.page:
-            continue
-        page = doc[f.page - 1]
-        color = COLORS.get(f.severity, (0.5, 0.5, 0.5))
-        text = f"[{SEV_LABEL[f.severity]}] {f.category}: {f.message}" + (f"\n{f.detail}" if f.detail else "")
-        if f.rect:
-            for pg_no, rect in [(f.page, f.rect)] + list(f.extra):
-                pg = doc[pg_no - 1]
-                rr = pymupdf.Rect(rect)
-                rr = pymupdf.Rect(rr.x0 - 2, rr.y0 - 2, rr.x1 + 2, rr.y1 + 2) & pg.rect
-                if rr.is_empty:
-                    continue
-                a = pg.add_rect_annot(rr)
-                a.set_colors(stroke=color)
-                a.set_border(width=1.5)
-                a.set_info(title="IEEE checker", content=text)
-                a.update()
-        else:
-            k = notes_per_page.get(f.page, 0)
-            notes_per_page[f.page] = k + 1
-            a = page.add_text_annot((8, 8 + 22 * k), text, icon="Note")
-            a.set_colors(stroke=color)
-            a.set_info(title="IEEE checker")
-            a.update()
-    doc.save(out_path, garbage=1, deflate=True)
-    doc.close()
-    return out_path
+    """Detailed annotated copy - see annotate.py."""
+    from .annotate import write_annotated_pdf as _write
+    return _write(res, out_path, paper)
