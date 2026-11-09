@@ -90,9 +90,24 @@ ieee-check *.pdf --out reports/ --json          # check many papers, JSON output
 
 The exit code is `1` when errors are found, so it can be used in scripts.
 
+### Updating
+
+Press **Check for updates** at the top right of the app. If a newer version is on GitHub, the app downloads it, checks it against the SHA-256 fingerprint GitHub publishes, installs it into the same place, and restarts with the new version. Your settings and right-click menu stay as they were.
+
+| System | What happens |
+|---|---|
+| Windows | The new installer runs silently. No questions, no admin rights for a normal (per-user) install. |
+| macOS | The app replaces itself in its folder (for example *Applications*). |
+| Linux `.deb` | Your password is asked for in the normal system dialog, because the app lives in `/opt`. |
+| Linux `.tar.gz` | The app replaces itself in `~/.local/opt`. No password needed. |
+
+From a terminal: `ieee-check --check-update` (just look) or `ieee-check --update` (download and install). The app only goes online when you ask it to; checking papers never needs the internet.
+
 ### About the IEEE PDF eXpress check
 
-Every paper approved by [IEEE PDF eXpress](https://ieee-pdf-express.org) contains the text *"Certified by IEEE PDFeXpress at MM/DD/YYYY HH:MM:SS AM/PM"* in its document properties (Acrobat Reader: *File → Properties*). If the stamp is missing, the paper didn't go through eXpress. If the approved file was edited, re-saved, compressed or merged afterwards, its last-modified date no longer matches its creation date, and the checker reports that. **Submit exactly the file eXpress e-mailed back.**
+Every paper approved by [IEEE PDF eXpress](https://ieee-pdf-express.org) carries a stamp in its document properties (Acrobat Reader: *File → Properties*; Mac: *Get Info*). It looks like *"Certified by IEEE PDFeXpress at 10/28/2026 4:40:27 PM"* or *"Certified by IEEE PDFExpress at October 28, 2026 16:40:27"*. If the stamp is missing, the paper didn't go through eXpress.
+
+eXpress sets the file's **last-modified time** to the moment it certified the paper. If the file is edited, re-saved, compressed or merged afterwards, that time changes and no longer matches the stamp, and the checker reports it. **Submit exactly the file eXpress e-mailed back.** The checker reads only what is written in the file; it can't contact IEEE to confirm the stamp is genuine.
 
 ### LaTeX users
 

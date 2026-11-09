@@ -59,8 +59,15 @@ Root: HKA; Subkey: "{code:EnvKey}"; ValueType: expandsz; ValueName: "Path"; Valu
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "Start {#AppName} now"; Flags: nowait postinstall skipifsilent
+; the in-app updater runs this Setup silently with /RELAUNCH=1 -> start the new version
+Filename: "{app}\{#AppExe}"; Flags: nowait runasoriginaluser; Check: IsRelaunch
 
 [Code]
+function IsRelaunch: Boolean;
+begin
+  Result := ExpandConstant('{param:RELAUNCH|0}') = '1';
+end;
+
 function EnvRoot: Integer;
 begin
   if IsAdminInstallMode then Result := HKEY_LOCAL_MACHINE else Result := HKEY_CURRENT_USER;

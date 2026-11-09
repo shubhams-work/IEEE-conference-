@@ -56,6 +56,13 @@ jobs:
           Stop-Process -Id $p.Id -Force
           New-Item -ItemType Directory -Force test-results | Out-Null
           Copy-Item "$env:RUNNER_TEMP\gui_test_IEEE_*" test-results\
+      - name: Test the self-update (installs a pretend newer version and restarts)
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist\*Setup*.exe | Select-Object -First 1
+          python tests/update_check.py $setup.FullName "$env:APP\ieee-check.exe"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Get-Process IEEE-Paper-Checker -ErrorAction SilentlyContinue | Stop-Process -Force
       - uses: actions/upload-artifact@v6
         with: { name: windows-installer, path: "dist/*Setup*.exe" }
       - uses: actions/upload-artifact@v6
@@ -107,6 +114,11 @@ jobs:
           test -f "$RUNNER_TEMP/gui_test_IEEE_report.html" || { echo "the window did not check the paper"; exit 1; }
           cp "$RUNNER_TEMP"/gui_test_IEEE_* test-results/
           pkill -f "IEEE-Paper-Checker.app/Contents/MacOS/IEEE-Paper-Checker" || true
+      - name: Test the self-update (installs a pretend newer version and restarts)
+        run: |
+          sleep 3
+          python tests/update_check.py "$(ls dist/*.dmg | head -1)" "$APP/Contents/MacOS/IEEE-Paper-Checker"
+          pkill -f "IEEE-Paper-Checker.app/Contents/MacOS/IEEE-Paper-Checker" || true
       - uses: actions/upload-artifact@v6
         with: { name: "macos-installer-${{ matrix.arch }}", path: "dist/*.dmg" }
       - uses: actions/upload-artifact@v6
@@ -134,6 +146,13 @@ jobs:
           xvfb-run -a bash -c 'ieee-paper-checker "$RUNNER_TEMP/gui_test.pdf" & PID=$!; sleep 30; kill -0 $PID || { echo "the app is not running"; exit 1; }; kill $PID'
           test -f "$RUNNER_TEMP/gui_test_IEEE_report.html" || { echo "the window did not check the paper"; exit 1; }
           mkdir -p test-results && cp "$RUNNER_TEMP"/gui_test_IEEE_* test-results/
+      - name: Test the self-update (.deb detection; full update of a per-user .tar.gz install)
+        run: |
+          python3 tests/update_check.py "$(ls dist/*.deb | head -1)" /usr/bin/ieee-check --expect-kind deb
+          TGZ=$(ls dist/*.tar.gz | head -1)
+          mkdir -p "$RUNNER_TEMP/tgz" && tar -xzf "$TGZ" -C "$RUNNER_TEMP/tgz"
+          "$RUNNER_TEMP"/tgz/*/install.sh
+          python3 tests/update_check.py "$TGZ" "$HOME/.local/opt/ieee-paper-checker/ieee-check"
       - uses: actions/upload-artifact@v6
         with:
           name: linux-installers

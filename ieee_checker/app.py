@@ -62,7 +62,10 @@ def cli(argv):
         except Exception:  # noqa: BLE001
             pass
     p = argparse.ArgumentParser(prog="ieee-check",
-                                description="Offline IEEE conference paper format checker")
+                                description="Offline IEEE conference paper format checker",
+                                epilog="Updates:  ieee-check --check-update   |   "
+                                       "ieee-check --update  (download and install the newest "
+                                       "version from GitHub)")
     p.add_argument("pdf", nargs="+", help="PDF file(s) to check")
     p.add_argument("--paper", choices=["auto", "letter", "a4"], default=spec.REQUIRED_PAPER,
                    help=f"required paper size (default: {spec.REQUIRED_PAPER})")
@@ -167,6 +170,8 @@ def gui():
               font=("TkDefaultFont", 14, "bold")).pack(anchor="w")
     ttk.Label(titles, text=f"{spec.CONFERENCE} rules - version {__version__} - works offline",
               foreground="#666").pack(anchor="w")
+    upd_btn = ttk.Button(head, text="Check for updates")
+    upd_btn.pack(side="right")
 
     top = ttk.Frame(root, padding=12)
     top.pack(fill="x")
@@ -290,6 +295,69 @@ def gui():
         threading.Thread(target=work, daemon=True).start()
 
     check_btn.configure(command=run_check)
+
+    # ------------------------------------------------------------ self-update
+    def update_flow():
+        from . import updater
+        upd_btn.configure(state="disabled")
+        status_var.set("Looking for updates on GitHub...")
+
+        def fail(msg):
+            upd_btn.configure(state="normal")
+            status_var.set("Update check finished.")
+            messagebox.showerror("Update", msg)
+
+        def found(info):
+            upd_btn.configure(state="normal")
+            status_var.set("Update check finished.")
+            if not info["newer"]:
+                messagebox.showinfo("Update", f"You have the latest version ({info['current']}).")
+                return
+            if info["kind"] == "source" or not info["asset"]:
+                if messagebox.askyesno("Update", f"Version {info['latest']} is available "
+                                       f"(you have {info['current']}).\n\nOpen the download "
+                                       "page?"):
+                    import webbrowser
+                    webbrowser.open(info["page"])
+                return
+            mb = info["asset"]["size"] / 1e6
+            if not messagebox.askyesno(
+                    "Update available",
+                    f"Version {info['latest']} is available (you have {info['current']}).\n\n"
+                    f"Download size: {mb:.0f} MB.\n\nUpdate now? The checker will close and "
+                    "open again with the new version."):
+                return
+            upd_btn.configure(state="disabled")
+            check_btn.configure(state="disabled")
+            prog.configure(value=0)
+
+            def dl():
+                try:
+                    path = updater.download(info["asset"], lambda f: root.after(0, lambda: (
+                        prog.configure(value=f * 100),
+                        status_var.set(f"Downloading version {info['latest']}... "
+                                       f"{f * 100:.0f}%"))))
+                    root.after(0, lambda: status_var.set("Installing the update..."))
+                    quit_now = updater.install(path)
+                    root.after(0, lambda: installed(quit_now))
+                except Exception as e:  # noqa: BLE001
+                    root.after(0, lambda: (check_btn.configure(state="normal"), fail(str(e))))
+            threading.Thread(target=dl, daemon=True).start()
+
+        def installed(quit_now):
+            if quit_now:
+                status_var.set("Restarting with the new version...")
+                root.after(300, root.destroy)
+
+        def work():
+            try:
+                info = updater.check()
+                root.after(0, lambda: found(info))
+            except Exception as e:  # noqa: BLE001
+                root.after(0, lambda: fail(str(e)))
+        threading.Thread(target=work, daemon=True).start()
+
+    upd_btn.configure(command=update_flow)
     if len(sys.argv) == 2 and sys.argv[1].lower().endswith(".pdf"):
         pdf_var.set(sys.argv[1])      # opened via right-click / "Open with" / drop on icon
         root.after(400, run_check)    # start checking straight away
@@ -298,6 +366,14 @@ def gui():
 
 def main():
     args = sys.argv[1:]
+    if args and args[0] in ("--update", "--check-update"):
+        from . import updater
+        for stream in (sys.stdout, sys.stderr):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:  # noqa: BLE001
+                pass
+        sys.exit(updater.cli(args))
     # A single PDF path (e.g. drag-and-drop onto the icon) opens the GUI pre-filled.
     if args and not (len(args) == 1 and args[0].lower().endswith(".pdf")
                      and getattr(sys, "frozen", False)):
